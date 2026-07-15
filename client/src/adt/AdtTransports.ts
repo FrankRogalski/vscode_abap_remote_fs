@@ -4,6 +4,7 @@ import { ADTClient, TransportInfo } from "abap-adt-api"
 import { fieldOrder, withp } from "../lib"
 import { TransportValidator } from "../api"
 import { uriRoot, getClient } from "./conections"
+import { resolveMcpTransport } from "./mcpTransportSelection"
 import { isAbapStat, isAbapFolder } from "abapfs"
 
 export interface TransportSelection {
@@ -161,7 +162,11 @@ export const selectTransportIfNeeded = async (uri: Uri) => {
       const { transport } = status
       const path = isAbapFolder(file) ? file.object.path : file.object.contentsPath()
       const client = getClient(uri.authority)
-      const trsel = await selectTransport(path, "", client, false, transport)
+      // On a first touch the fresh lock has no transport yet: ask the connected
+      // MCP client to pick one so AI/MCP writes are not blocked by the
+      // interactive prompt (no MCP / cancelled -> ask as before).
+      const current = transport || (await resolveMcpTransport(uri.authority)) || ""
+      const trsel = await selectTransport(path, "", client, false, current)
       if (trsel.cancelled) throw new Error("Transport required")
       return trsel
 

@@ -27,6 +27,14 @@ import { createMcpAuthorizedOptions } from "./lm-tools/toolGuard"
 import { funWindow as window } from "./funMessenger"
 import { executeReplace } from "./lm-tools/mcpReplaceStringTool"
 import { getDiagnosticsForUri } from "./lm-tools/mcpGetDiagnosticsTool"
+import { connectedRoots } from "../config"
+import {
+  clearMcpWorkingTransport,
+  getMcpWorkingTransport,
+  promptMcpTransport,
+  setTransportElicitor,
+  TransportElicitor
+} from "../adt/mcpTransportSelection"
 
 // ============================================================================
 // TYPES
@@ -213,6 +221,28 @@ export function jsonSchemaToZod(
 // Tag used to identify ABAP FS tools
 const ABAP_FS_TAG = "abap-fs"
 
+/** Build an MCP text tool result. */
+function textResult(text: string, isError = false) {
+  const result: { content: { type: "text"; text: string }[]; isError?: boolean } = {
+    content: [{ type: "text", text }]
+  }
+  if (isError) result.isError = true
+  return result
+}
+
+/** Resolve the connection for the working-transport tool: the given id, or the
+ *  sole connected system when unambiguous. */
+function resolveWorkingTransportConnId(connectionId?: string): string {
+  if (connectionId) return connectionId
+  const ids = Array.from(connectedRoots().keys())
+  if (ids.length === 1) return ids[0]
+  if (ids.length === 0)
+    throw new Error("No SAP system is connected. Open an ABAP workspace folder first.")
+  throw new Error(
+    `Multiple systems are connected (${ids.join(", ")}). Provide connectionId to choose one.`
+  )
+}
+
 /**
  * Create an MCP server that dynamically wraps all VS Code LM tools
  */
@@ -221,6 +251,62 @@ function createMcpServer(): McpServer {
     name: "abap-fs",
     version: "1.0.0"
   })
+
+  // Ask the connected MCP client to pick the transport that AI/MCP writes are
+  // assigned to. Returns the chosen TRKORR, "" for a local object, or undefined
+  // when the client cannot elicit / the user declined (callers then fall back to
+  // the normal interactive prompt).
+  const makeElicitor =
+    (mcp: McpServer): TransportElicitor =>
+    async (connId, choices) => {
+      const values = ["", ...choices.map(c => c.transport)]
+      const names = [
+        "Local / no transport",
+        ...choices.map(c => `${c.transport} — ${c.description}`)
+      ]
+      try {
+        const result = await mcp.server.elicitInput({
+          mode: "form",
+          message: `Select the transport request for AI changes on "${connId}" (choose "Local / no transport" for local objects):`,
+          requestedSchema: {
+            type: "object",
+            properties: {
+              transport: {
+                type: "string",
+                title: "Transport request",
+                description:
+                  "Transport that AI/MCP-created objects and objects edited for the first time are assigned to",
+                enum: values,
+                enumNames: names
+              }
+            },
+            required: ["transport"]
+          }
+        })
+        if (result.action !== "accept") return undefined
+        const chosen = result.content?.transport
+        return typeof chosen === "string" ? chosen : undefined
+      } catch (error) {
+        // Most commonly the client does not advertise the elicitation
+        // capability; fall back to the normal interactive prompt.
+        log(
+          `MCP transport elicitation unavailable: ${error instanceof Error ? error.message : String(error)}`
+        )
+        return undefined
+      }
+    }
+
+  // Register the elicitor only while a tool invocation runs, so transport
+  // selection is asked through the client for MCP writes but never for VS Code
+  // Copilot / manual edits.
+  const withTransportElicitor = async <T>(fn: () => Promise<T>): Promise<T> => {
+    setTransportElicitor(makeElicitor(server))
+    try {
+      return await fn()
+    } finally {
+      setTransportElicitor(undefined)
+    }
+  }
 
   // Get all registered LM tools and filter to only ABAP FS tools
   const allTools = vscode.lm.tools
@@ -242,75 +328,76 @@ function createMcpServer(): McpServer {
         description: toolDescription,
         inputSchema: zodSchema
       },
-      async (args: Record<string, unknown>) => {
-        try {
-          const tokenSource = new vscode.CancellationTokenSource()
+      async (args: Record<string, unknown>) =>
+        withTransportElicitor(async () => {
+          try {
+            const tokenSource = new vscode.CancellationTokenSource()
 
-          // Look up the tool instance from our shared registry so we can
-          // call invoke() directly, bypassing vscode.lm.invokeTool() and
-          // its prepareInvocation confirmation dialog pipeline.
-          const registeredTool = toolRegistry.get(toolName)
-          let result: vscode.LanguageModelToolResult
+            // Look up the tool instance from our shared registry so we can
+            // call invoke() directly, bypassing vscode.lm.invokeTool() and
+            // its prepareInvocation confirmation dialog pipeline.
+            const registeredTool = toolRegistry.get(toolName)
+            let result: vscode.LanguageModelToolResult
 
-          if (registeredTool) {
-            const authorizedOptions = createMcpAuthorizedOptions(args)
-            const invokeResult = await registeredTool.invoke(
-              authorizedOptions as vscode.LanguageModelToolInvocationOptions<any>,
-              tokenSource.token
-            )
-            if (!invokeResult) {
-              throw new Error(`Tool ${toolName} returned no result`)
-            }
-            result = invokeResult
-          } else {
-            result = await vscode.lm.invokeTool(
-              toolName,
-              { input: args, toolInvocationToken: undefined },
-              tokenSource.token
-            )
-          }
-
-          const textParts: string[] = []
-
-          for await (const part of result.content) {
-            if (part instanceof vscode.LanguageModelTextPart) {
-              textParts.push(part.value)
-            } else if (typeof part === "object" && part !== null && "value" in part) {
-              const partWithValue = part as { value: unknown }
-              if (typeof partWithValue.value === "string") {
-                textParts.push(partWithValue.value)
-              } else {
-                textParts.push(JSON.stringify(partWithValue.value))
+            if (registeredTool) {
+              const authorizedOptions = createMcpAuthorizedOptions(args)
+              const invokeResult = await registeredTool.invoke(
+                authorizedOptions as vscode.LanguageModelToolInvocationOptions<any>,
+                tokenSource.token
+              )
+              if (!invokeResult) {
+                throw new Error(`Tool ${toolName} returned no result`)
               }
+              result = invokeResult
             } else {
-              textParts.push(JSON.stringify(part))
+              result = await vscode.lm.invokeTool(
+                toolName,
+                { input: args, toolInvocationToken: undefined },
+                tokenSource.token
+              )
+            }
+
+            const textParts: string[] = []
+
+            for await (const part of result.content) {
+              if (part instanceof vscode.LanguageModelTextPart) {
+                textParts.push(part.value)
+              } else if (typeof part === "object" && part !== null && "value" in part) {
+                const partWithValue = part as { value: unknown }
+                if (typeof partWithValue.value === "string") {
+                  textParts.push(partWithValue.value)
+                } else {
+                  textParts.push(JSON.stringify(partWithValue.value))
+                }
+              } else {
+                textParts.push(JSON.stringify(part))
+              }
+            }
+
+            const resultText = textParts.join("\n")
+
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: resultText
+                }
+              ]
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `❌ Error invoking ${toolName}: ${errorMessage}`
+                }
+              ],
+              isError: true
             }
           }
-
-          const resultText = textParts.join("\n")
-
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: resultText
-              }
-            ]
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error)
-
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `❌ Error invoking ${toolName}: ${errorMessage}`
-              }
-            ],
-            isError: true
-          }
-        }
-      }
+        })
     )
   }
 
@@ -352,50 +439,124 @@ function createMcpServer(): McpServer {
           .describe("The replacement text. Ensure the resulting code is syntactically valid ABAP.")
       }
     },
-    async (args: Record<string, unknown>) => {
-      try {
-        const fileUri = args.fileUri as string
-        const oldString = args.oldString as string
-        const newString = args.newString as string
+    async (args: Record<string, unknown>) =>
+      withTransportElicitor(async () => {
+        try {
+          const fileUri = args.fileUri as string
+          const oldString = args.oldString as string
+          const newString = args.newString as string
 
-        if (!fileUri) {
-          throw new Error("fileUri is required")
-        }
-        if (newString === undefined || newString === null) {
-          throw new Error("newString is required (use empty string to delete text)")
-        }
-        // Note: empty oldString is allowed only when the file is blank.
-        // That check happens inside executeReplace/findAndReplace once the
-        // current file content is known.
+          if (!fileUri) {
+            throw new Error("fileUri is required")
+          }
+          if (newString === undefined || newString === null) {
+            throw new Error("newString is required (use empty string to delete text)")
+          }
+          // Note: empty oldString is allowed only when the file is blank.
+          // That check happens inside executeReplace/findAndReplace once the
+          // current file content is known.
 
-        await executeReplace(fileUri, oldString, newString)
+          await executeReplace(fileUri, oldString, newString)
 
-        const oldLineCount = oldString.split("\n").length
-        const newLineCount = newString.split("\n").length
+          const oldLineCount = oldString.split("\n").length
+          const newLineCount = newString.split("\n").length
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text:
-                `✅ Successfully replaced ${oldLineCount} line(s) with ${newLineCount} line(s) in ${fileUri}\n\n` +
-                `The file has been saved and synced to SAP.`
-            }
-          ]
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text:
+                  `✅ Successfully replaced ${oldLineCount} line(s) with ${newLineCount} line(s) in ${fileUri}\n\n` +
+                  `The file has been saved and synced to SAP.`
+              }
+            ]
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `❌ Error: ${errorMessage}`
+              }
+            ],
+            isError: true
+          }
         }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `❌ Error: ${errorMessage}`
-            }
-          ],
-          isError: true
-        }
+      })
+  )
+
+  // Select Working Transport - asks the user (through the MCP client) to pick
+  // the transport that AI/MCP writes are assigned to for the rest of the session
+  server.registerTool(
+    "select_working_transport",
+    {
+      title: "Select Working Transport",
+      description:
+        "Ask the user (through this MCP client) to pick the transport request that AI/MCP-created objects, " +
+        "and objects edited for the first time, should be assigned to. The choice is remembered per connection " +
+        "for the rest of the session so later writes do not prompt again.\n\n" +
+        "Actions:\n" +
+        "- select (default): prompt the user to choose a transport now.\n" +
+        "- status: report the transport currently remembered for the connection.\n" +
+        "- clear: forget the remembered transport so the next write asks again.\n\n" +
+        "Provide connectionId (the SAP connection/system name, e.g. from get_connected_systems). " +
+        "It may be omitted only when exactly one system is connected.",
+      inputSchema: {
+        action: z
+          .enum(["select", "status", "clear"])
+          .optional()
+          .describe("What to do. Defaults to 'select'."),
+        connectionId: z
+          .string()
+          .optional()
+          .describe(
+            "SAP connection/system name. Optional when a single system is connected; required otherwise."
+          )
       }
-    }
+    },
+    async (args: Record<string, unknown>) =>
+      withTransportElicitor(async () => {
+        try {
+          const action = (args.action as string) || "select"
+          const connId = resolveWorkingTransportConnId(args.connectionId as string | undefined)
+
+          if (action === "status") {
+            const current = getMcpWorkingTransport(connId)
+            return textResult(
+              current
+                ? `Working transport for "${connId}": ${current}`
+                : `No working transport set for "${connId}" — the user is asked on the next AI create / first edit.`
+            )
+          }
+
+          if (action === "clear") {
+            clearMcpWorkingTransport(connId)
+            return textResult(
+              `Cleared the working transport for "${connId}" — the next AI create / first edit will ask again.`
+            )
+          }
+
+          const chosen = await promptMcpTransport(connId)
+          if (chosen === undefined) {
+            const current = getMcpWorkingTransport(connId)
+            return textResult(
+              current === undefined
+                ? `No transport was selected for "${connId}" (cancelled, unsupported client, or no modifiable transports). ` +
+                    `AI writes will use local objects or fall back to the interactive prompt.`
+                : `Working transport for "${connId}" set to local / no transport. Objects will be created as local.`
+            )
+          }
+          return textResult(
+            `Working transport for "${connId}" set to ${chosen}. AI-created and first-edited objects will be assigned to it.`
+          )
+        } catch (error) {
+          return textResult(
+            `❌ Error: ${error instanceof Error ? error.message : String(error)}`,
+            true
+          )
+        }
+      })
   )
 
   // Get Diagnostics - returns syntax errors/warnings for a given ABAP file

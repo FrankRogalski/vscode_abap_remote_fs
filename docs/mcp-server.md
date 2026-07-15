@@ -123,6 +123,7 @@ All 40 ABAP FS tools are exposed, including:
 | `abap_activate`             | Activate ABAP objects              |
 | `replace_string_in_abap_object` | Edit ABAP source code (find & replace) |
 | `get_abap_diagnostics`      | Get syntax errors/warnings for a file  |
+| `select_working_transport`  | Ask you to pick the transport AI writes use |
 
 ## Write Support
 
@@ -134,6 +135,18 @@ MCP clients can now edit ABAP source code directly. The workflow:
 4. **Verify** — call `get_abap_diagnostics` with the same URI to check for syntax errors
 
 Edits are immediately synced to SAP (ABAP FS handles locking, saving, and unlocking automatically). There is no keep/undo UI — changes are applied directly.
+
+### Choosing a Transport
+
+When an AI/MCP write needs a transport request — creating an object, or editing a transportable object for the first time — the MCP server asks **you** to pick one through your AI client (this uses MCP _elicitation_, so the prompt appears in the client, not in VS Code). Your choice is remembered per connection for the rest of the session, so a single task that touches several objects only asks once.
+
+Call `select_working_transport` to control it explicitly:
+
+- `select` (default) — pick the transport now
+- `status` — show the transport currently in use
+- `clear` — forget it, so the next write asks again
+
+Pass `connectionId` when more than one SAP system is connected. If your AI client does not support elicitation, transport selection falls back to the normal prompt inside VS Code.
 
 
 ## Limitations

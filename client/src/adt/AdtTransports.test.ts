@@ -15,6 +15,9 @@ jest.mock("./conections", () => ({
   uriRoot: jest.fn(),
   getClient: jest.fn()
 }))
+jest.mock("./mcpTransportSelection", () => ({
+  resolveMcpTransport: jest.fn()
+}))
 jest.mock("abapfs", () => ({
   isAbapStat: jest.fn(),
   isAbapFolder: jest.fn()

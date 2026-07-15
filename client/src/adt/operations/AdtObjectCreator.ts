@@ -27,6 +27,7 @@ import { selectTransport } from "../AdtTransports"
 import { fieldOrder, quickPick, rfsExtract, rfsTaskEither, rfsTryCatch, log } from "../../lib"
 import { MySearchResult, AdtObjectFinder, pathSequence, createUri } from "./AdtObjectFinder"
 import { getClient, getRoot } from "../conections"
+import { resolveMcpTransport } from "../mcpTransportSelection"
 import { isAbapFolder, isAbapStat, isFolder } from "abapfs"
 import { fromNode } from "abapobject"
 import { pipe } from "fp-ts/lib/pipeable"
@@ -97,12 +98,17 @@ export class AdtObjectCreator {
 
       const layer = hasPackageOptions(options) ? options.transportLayer : ""
 
+      // For AI/MCP-driven creation, ask the connected client to pick a transport
+      // instead of prompting in VS Code; falls back to the prompt when not in an
+      // MCP context or the user cancelled.
+      const preselected = await resolveMcpTransport(this.connId)
+
       const transport = await selectTransport(
         objectPath(options.objtype, options.name, options.parentName),
         devclass,
         getClient(this.connId),
         true,
-        undefined,
+        preselected,
         layer
       )
       //log("Step 5: Transport selection completed");
