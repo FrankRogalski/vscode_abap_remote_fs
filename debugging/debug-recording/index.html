@@ -2950,9 +2950,9 @@
 </blockquote>
 <ol>
 <li>Start a debug session as usual (set breakpoints, attach to user/terminal)</li>
-<li>Open the Command Palette (<code>Ctrl+Shift+P</code>) → <strong>ABAP: Start Debug Recording</strong></li>
+<li>Open the Command Palette (<code>Ctrl+Shift+P</code>) → <strong>ABAP FS: Start Debug Recording</strong></li>
 <li>Step through your code normally — every step is captured</li>
-<li><code>Ctrl+Shift+P</code> → <strong>ABAP: Stop Debug Recording</strong></li>
+<li><code>Ctrl+Shift+P</code> → <strong>ABAP FS: Stop Debug Recording</strong></li>
 <li>At the prompt, choose <strong>Save</strong> (plain <code>.abaprecord</code>) or <strong>Compress &amp; Save</strong> (<code>.abaprecord.gz</code>, ~80–95% smaller)</li>
 </ol>
 <p><strong>What is captured per step:</strong></p>
@@ -2964,7 +2964,7 @@
 <hr />
 <h2 id="replaying-a-recording">Replaying a Recording<a class="headerlink" href="#replaying-a-recording" title="Permanent link">&para;</a></h2>
 <ol>
-<li><code>Ctrl+Shift+P</code> → <strong>ABAP: Replay Debug Recording</strong></li>
+<li><code>Ctrl+Shift+P</code> → <strong>ABAP FS: Replay Debug Recording</strong></li>
 <li>Select a <code>.abaprecord</code> or <code>.abaprecord.gz</code> file — both are handled automatically</li>
 <li>The replay session opens showing code, stack, and variables exactly as recorded</li>
 </ol>
@@ -3015,11 +3015,11 @@
 </thead>
 <tbody>
 <tr>
-<td><strong>ABAP: Compress Debug Recording</strong></td>
+<td><strong>ABAP FS: Compress Debug Recording</strong></td>
 <td>Compress an existing <code>.abaprecord</code> → <code>.abaprecord.gz</code></td>
 </tr>
 <tr>
-<td><strong>ABAP: Decompress Debug Recording</strong></td>
+<td><strong>ABAP FS: Decompress Debug Recording</strong></td>
 <td>Convert <code>.abaprecord.gz</code> back to plain JSON</td>
 </tr>
 </tbody>
@@ -3036,23 +3036,23 @@
 </thead>
 <tbody>
 <tr>
-<td><code>ABAP: Start Debug Recording</code></td>
+<td><code>ABAP FS: Start Debug Recording</code></td>
 <td>Begin recording the active debug session</td>
 </tr>
 <tr>
-<td><code>ABAP: Stop Debug Recording</code></td>
+<td><code>ABAP FS: Stop Debug Recording</code></td>
 <td>Stop and save (plain or compressed)</td>
 </tr>
 <tr>
-<td><code>ABAP: Replay Debug Recording</code></td>
+<td><code>ABAP FS: Replay Debug Recording</code></td>
 <td>Open and replay a recording file</td>
 </tr>
 <tr>
-<td><code>ABAP: Compress Debug Recording</code></td>
+<td><code>ABAP FS: Compress Debug Recording</code></td>
 <td>Compress an existing <code>.abaprecord</code> file</td>
 </tr>
 <tr>
-<td><code>ABAP: Decompress Debug Recording</code></td>
+<td><code>ABAP FS: Decompress Debug Recording</code></td>
 <td>Decompress a <code>.abaprecord.gz</code> file</td>
 </tr>
 </tbody>
