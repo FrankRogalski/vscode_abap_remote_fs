@@ -9,7 +9,7 @@ jest.mock("../services/funMessenger", () => ({
 }))
 jest.mock("../config", () => ({ pickAdtRoot: jest.fn() }))
 jest.mock("../adt/conections", () => ({ getClient: jest.fn() }))
-jest.mock("../views/transports", () => ({ readTransports: jest.fn() }))
+jest.mock("../adt/transportsService", () => ({ readTransports: jest.fn() }))
 jest.mock("../adt/currentTransport", () => ({
   getCurrentTransport: jest.fn(),
   setCurrentTransport: jest.fn(),
@@ -24,7 +24,7 @@ import {
 import { funWindow as window } from "../services/funMessenger"
 import { pickAdtRoot } from "../config"
 import { getClient } from "../adt/conections"
-import { readTransports } from "../views/transports"
+import { readTransports } from "../adt/transportsService"
 import {
   getCurrentTransport,
   setCurrentTransport,

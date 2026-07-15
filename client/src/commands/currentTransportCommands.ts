@@ -3,7 +3,7 @@ import { TransportRequest } from "abap-adt-api"
 import { funWindow as window } from "../services/funMessenger"
 import { pickAdtRoot } from "../config"
 import { getClient } from "../adt/conections"
-import { readTransports } from "../views/transports"
+import { readTransports } from "../adt/transportsService"
 import {
   clearCurrentTransport,
   getCurrentTransport,
