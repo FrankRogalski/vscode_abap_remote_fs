@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.0
+
+### Minor Changes
+
+- 4c83cbb: Improve JSDoc and inline documentation in the server module.
+
 ## 2.6.5
 
 ### Patch Changes
