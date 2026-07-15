@@ -19,6 +19,7 @@ jest.mock("abapfs", () => ({
   isAbapStat: jest.fn(),
   isAbapFolder: jest.fn()
 }))
+jest.mock("./currentTransport", () => ({ getCurrentTransport: jest.fn() }))
 
 import { trSel, TransportStatus, transportValidators } from "./AdtTransports"
 import { funWindow as window } from "../services/funMessenger"
@@ -193,5 +194,69 @@ describe("selectTransport", () => {
     mockWindow.showInputBox.mockResolvedValue(undefined)
     const result = await selectTransport("/path", "ZDEV", mockClient)
     expect(result.cancelled).toBe(true)
+  })
+})
+
+describe("selectTransportIfNeeded (first-touch / edit path)", () => {
+  const { selectTransportIfNeeded } = jest.requireActual("./AdtTransports")
+  const { uriRoot, getClient } = require("./conections")
+  const { isAbapStat, isAbapFolder } = require("abapfs")
+  const { getCurrentTransport } = require("./currentTransport")
+  const uri = { path: "/obj/main", authority: "trl" } as any
+
+  const setup = (corrnr: string, transports: any[], isLocal = false) => {
+    const file = { object: { contentsPath: () => "/content/path" } }
+    const root = {
+      getNode: jest.fn().mockReturnValue(file),
+      lockManager: {
+        lockStatus: jest.fn().mockReturnValue({
+          status: "locked",
+          IS_LOCAL: isLocal,
+          CORRNR: corrnr
+        })
+      }
+    }
+    ;(uriRoot as jest.Mock).mockReturnValue(root)
+    ;(isAbapStat as jest.Mock).mockReturnValue(true)
+    ;(isAbapFolder as jest.Mock).mockReturnValue(false)
+    ;(getClient as jest.Mock).mockReturnValue({
+      transportInfo: jest.fn().mockResolvedValue({
+        LOCKS: null,
+        TRANSPORTS: transports,
+        DLVUNIT: "",
+        OBJECT: "PROG",
+        OBJECTNAME: "ZPROG"
+      }),
+      createTransport: jest.fn()
+    })
+  }
+
+  beforeEach(() => jest.clearAllMocks())
+
+  it("uses the configured current transport when the fresh lock has none", async () => {
+    setup("", [{ TRKORR: "DEVK900123", AS4TEXT: "cur" }])
+    ;(getCurrentTransport as jest.Mock).mockReturnValue("DEVK900123")
+    const result = await selectTransportIfNeeded(uri)
+    expect(getCurrentTransport).toHaveBeenCalledWith("trl")
+    expect(result.transport).toBe("DEVK900123")
+    expect(mockWindow.showQuickPick).not.toHaveBeenCalled()
+  })
+
+  it("prefers the lock's existing transport over the configured one", async () => {
+    setup("LOCKTR001", [{ TRKORR: "LOCKTR001", AS4TEXT: "lock" }])
+    ;(getCurrentTransport as jest.Mock).mockReturnValue("DEVK900123")
+    const result = await selectTransportIfNeeded(uri)
+    expect(getCurrentTransport).not.toHaveBeenCalled()
+    expect(result.transport).toBe("LOCKTR001")
+    expect(mockWindow.showQuickPick).not.toHaveBeenCalled()
+  })
+
+  it("prompts as before when no current transport is configured", async () => {
+    setup("", [{ TRKORR: "T001", AS4TEXT: "Req 1" }])
+    ;(getCurrentTransport as jest.Mock).mockReturnValue(undefined)
+    mockWindow.showQuickPick.mockResolvedValue("T001 Req 1" as any)
+    const result = await selectTransportIfNeeded(uri)
+    expect(mockWindow.showQuickPick).toHaveBeenCalled()
+    expect(result.transport).toBe("T001")
   })
 })

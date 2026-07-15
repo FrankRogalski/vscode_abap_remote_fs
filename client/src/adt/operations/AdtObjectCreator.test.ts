@@ -18,6 +18,8 @@ jest.mock("../../services/funMessenger", () => ({
 
 jest.mock("../AdtTransports", () => ({ selectTransport: jest.fn() }))
 
+jest.mock("../currentTransport", () => ({ getCurrentTransport: jest.fn() }))
+
 jest.mock("../../lib", () => ({
   fieldOrder: () => () => 0,
   quickPick: jest.fn(),
@@ -247,5 +249,55 @@ describe("AdtObjectCreator", () => {
     ;(pathSequence as jest.Mock).mockReturnValue([])
     const result = await creator.createObject(undefined)
     expect(result).toBeUndefined()
+  })
+
+  it("forwards the configured current transport to selectTransport", async () => {
+    const { getCurrentTransport } = require("../currentTransport")
+    ;(getCurrentTransport as jest.Mock).mockReturnValue("DEVK900123")
+
+    const { getClient, getRoot } = require("../conections")
+    ;(getClient as jest.Mock).mockReturnValue({
+      username: "TESTUSER",
+      language: "EN",
+      validateNewObject: jest.fn().mockResolvedValue(true),
+      createObject: jest.fn().mockResolvedValue(undefined)
+    })
+    ;(getRoot as jest.Mock).mockReturnValue({
+      getNode: jest.fn().mockReturnValue(null),
+      getNodePath: jest.fn().mockReturnValue([]),
+      service: {}
+    })
+
+    const { funWindow } = require("../../services/funMessenger")
+    ;(funWindow.showQuickPick as jest.Mock).mockResolvedValue({
+      typeId: "PROG/P",
+      label: "Program",
+      maxLen: 40
+    })
+    ;(funWindow.showInputBox as jest.Mock)
+      .mockResolvedValueOnce("ZPROG")
+      .mockResolvedValueOnce("desc")
+
+    const { AdtObjectFinder } = require("./AdtObjectFinder")
+    ;(AdtObjectFinder as jest.Mock).mockImplementation(() => ({
+      findObject: jest.fn().mockResolvedValue({ name: "ZPKG" }),
+      vscodeUriWithFile: jest.fn()
+    }))
+
+    const { selectTransport } = require("../AdtTransports")
+    ;(selectTransport as jest.Mock).mockResolvedValue({ cancelled: false, transport: "DEVK900123" })
+
+    const { fromNode } = require("abapobject")
+    ;(fromNode as jest.Mock).mockReturnValue({
+      name: "ZPROG",
+      type: "PROG/P",
+      loadStructure: jest.fn().mockResolvedValue(undefined)
+    })
+
+    await creator.createObject(undefined)
+
+    expect(getCurrentTransport).toHaveBeenCalledWith("testconn")
+    // 5th argument (index 4) of selectTransport is the "current" transport
+    expect((selectTransport as jest.Mock).mock.calls[0][4]).toBe("DEVK900123")
   })
 })

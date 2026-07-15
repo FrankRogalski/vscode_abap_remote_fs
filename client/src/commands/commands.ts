@@ -72,6 +72,10 @@ import { manageTextElementsCommand } from "./textElementsCommands"
 import { configureFeedsCommand } from "./configureFeeds"
 import { publishServiceBindingCommand } from "./publishServiceBinding"
 import { testServiceBindingCommand } from "./testServiceBinding"
+import {
+  setCurrentTransportCommand,
+  clearCurrentTransportCommand
+} from "./currentTransportCommands"
 
 export function currentUri() {
   if (!window.activeTextEditor) return
@@ -1210,5 +1214,13 @@ export class AdtCommands {
   @command(AbapFsCommands.testServiceBinding)
   private static async testServiceBindingCommand() {
     return testServiceBindingCommand()
+  }
+  @command(AbapFsCommands.setCurrentTransport)
+  private static async setCurrentTransportCommand(uri?: Uri) {
+    return setCurrentTransportCommand(uri)
+  }
+  @command(AbapFsCommands.clearCurrentTransport)
+  private static async clearCurrentTransportCommand(uri?: Uri) {
+    return clearCurrentTransportCommand(uri)
   }
 }

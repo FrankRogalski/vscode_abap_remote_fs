@@ -27,6 +27,7 @@ import { selectTransport } from "../AdtTransports"
 import { fieldOrder, quickPick, rfsExtract, rfsTaskEither, rfsTryCatch, log } from "../../lib"
 import { MySearchResult, AdtObjectFinder, pathSequence, createUri } from "./AdtObjectFinder"
 import { getClient, getRoot } from "../conections"
+import { getCurrentTransport } from "../currentTransport"
 import { isAbapFolder, isAbapStat, isFolder } from "abapfs"
 import { fromNode } from "abapobject"
 import { pipe } from "fp-ts/lib/pipeable"
@@ -102,7 +103,7 @@ export class AdtObjectCreator {
         devclass,
         getClient(this.connId),
         true,
-        undefined,
+        getCurrentTransport(this.connId),
         layer
       )
       //log("Step 5: Transport selection completed");

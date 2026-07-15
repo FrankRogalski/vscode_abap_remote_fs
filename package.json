@@ -2740,6 +2740,17 @@
         "category": "ABAP FS"
       },
       {
+        "command": "abapfs.setCurrentTransport",
+        "title": "Set current transport (auto-assign AI-created / first-edited objects)",
+        "category": "ABAP FS",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "abapfs.clearCurrentTransport",
+        "title": "Clear current transport (ask every time)",
+        "category": "ABAP FS"
+      },
+      {
         "command": "abapfs.createInEditor",
         "title": "ABAP Create object (editor)",
         "category": "ABAP FS",
@@ -4496,6 +4507,15 @@
           "type": "string",
           "default": "",
           "description": "API key for MCP server authentication. When set, clients must include this key in the Authorization header (Bearer token). Leave empty to allow unauthenticated local access (not recommended for shared machines)."
+        },
+        "abapfs.currentTransport": {
+          "type": "object",
+          "default": {},
+          "scope": "application",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "markdownDescription": "Per-connection \"currently working on\" transport request. New objects created by the AI/MCP tools, and existing objects modified for the first time by the AI, are auto-assigned to the matching connection's transport instead of prompting. Keys are connection names, values are transport request IDs (e.g. `DEVK900123`). Remove an entry — or run **ABAP FS: Clear current transport** — to be prompted for a transport each time. Normally set via the **ABAP FS: Set current transport** command rather than edited here."
         },
         "abapfs.autoOpenUnsupportedInGui": {
           "type": "boolean",

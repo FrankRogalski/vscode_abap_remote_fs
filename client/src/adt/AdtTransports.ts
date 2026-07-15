@@ -4,6 +4,7 @@ import { ADTClient, TransportInfo } from "abap-adt-api"
 import { fieldOrder, withp } from "../lib"
 import { TransportValidator } from "../api"
 import { uriRoot, getClient } from "./conections"
+import { getCurrentTransport } from "./currentTransport"
 import { isAbapStat, isAbapFolder } from "abapfs"
 
 export interface TransportSelection {
@@ -161,7 +162,11 @@ export const selectTransportIfNeeded = async (uri: Uri) => {
       const { transport } = status
       const path = isAbapFolder(file) ? file.object.path : file.object.contentsPath()
       const client = getClient(uri.authority)
-      const trsel = await selectTransport(path, "", client, false, transport)
+      // On a first touch the fresh lock has no transport yet: fall back to the
+      // connection's configured "current" transport so AI/MCP writes are not
+      // blocked by the interactive prompt (cleared -> ask as before).
+      const current = transport || getCurrentTransport(uri.authority) || ""
+      const trsel = await selectTransport(path, "", client, false, current)
       if (trsel.cancelled) throw new Error("Transport required")
       return trsel
 

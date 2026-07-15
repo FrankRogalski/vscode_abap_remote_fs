@@ -49,6 +49,7 @@ import { initializeMcpServer, startMcpServerCommand } from "./services/mcpServer
 import { registerChatTools } from "./adt/ai/tools"
 import { initializeEnhancementDecorations } from "./views/enhancementDecorations"
 import { initializeBlameGutter } from "./views/blameGutter"
+import { initCurrentTransportStatusBar } from "./adt/currentTransportStatusBar"
 import { clearSystemInfoCache } from "./services/sapSystemInfo"
 import { HeartbeatWatchlist } from "./services/heartbeat/heartbeatWatchlist"
 import { RapGeneratorPanel } from "./views/rapGenerator/rapGeneratorView"
@@ -401,6 +402,13 @@ export async function activate(ctx: ExtensionContext): Promise<AbapFsApi> {
     log("📋 Blame gutter initialized — Ready to point fingers at your colleagues' code")
   } catch (error) {
     log(`⚠️ Blame gutter initialization failed: ${error}`)
+  }
+
+  // Current-transport status bar item (click to set/change/clear)
+  try {
+    initCurrentTransportStatusBar(context)
+  } catch (error) {
+    log(`⚠️ Current transport status bar initialization failed: ${error}`)
   }
   registerChatTools(context)
 
