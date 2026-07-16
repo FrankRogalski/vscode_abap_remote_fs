@@ -15,15 +15,13 @@ jest.mock("./conections", () => ({
   uriRoot: jest.fn(),
   getClient: jest.fn()
 }))
-jest.mock("./mcpTransportSelection", () => ({
-  resolveMcpTransport: jest.fn()
-}))
 jest.mock("abapfs", () => ({
   isAbapStat: jest.fn(),
   isAbapFolder: jest.fn()
 }))
 
 import { trSel, TransportStatus, transportValidators } from "./AdtTransports"
+import { setTransportElicitor } from "./mcpTransportSelection"
 import { funWindow as window } from "../services/funMessenger"
 import { withp } from "../lib"
 
@@ -196,5 +194,108 @@ describe("selectTransport", () => {
     mockWindow.showInputBox.mockResolvedValue(undefined)
     const result = await selectTransport("/path", "ZDEV", mockClient)
     expect(result.cancelled).toBe(true)
+  })
+})
+
+describe("selectTransport with an MCP elicitor", () => {
+  let mockClient: any
+  const { selectTransport } = jest.requireActual("./AdtTransports")
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockClient = {
+      transportInfo: jest.fn(),
+      createTransport: jest.fn()
+    }
+    mockClient.transportInfo.mockResolvedValue({
+      LOCKS: null,
+      TRANSPORTS: [
+        { TRKORR: "T001", AS4TEXT: "Request 1" },
+        { TRKORR: "T002", AS4TEXT: "Request 2" }
+      ],
+      DLVUNIT: "",
+      OBJECT: "PROG",
+      OBJECTNAME: "ZPROG"
+    })
+  })
+
+  afterEach(() => setTransportElicitor(undefined))
+
+  it("asks through the elicitor instead of the VS Code prompt", async () => {
+    const elicitor = jest.fn(async () => "T002")
+    setTransportElicitor(elicitor)
+
+    const result = await selectTransport("/path", "DEVC", mockClient)
+    expect(result.transport).toBe("T002")
+    expect(result.cancelled).toBe(false)
+    expect(elicitor).toHaveBeenCalledWith("/path", [
+      { transport: "T001", description: "Request 1" },
+      { transport: "T002", description: "Request 2" }
+    ])
+    expect(mockWindow.showQuickPick).not.toHaveBeenCalled()
+  })
+
+  it("asks again on every selection - nothing is remembered", async () => {
+    const elicitor = jest.fn().mockResolvedValueOnce("T001").mockResolvedValueOnce("T002")
+    setTransportElicitor(elicitor)
+
+    expect((await selectTransport("/path", "DEVC", mockClient)).transport).toBe("T001")
+    expect((await selectTransport("/path", "DEVC", mockClient)).transport).toBe("T002")
+    expect(elicitor).toHaveBeenCalledTimes(2)
+  })
+
+  it("fails instead of falling back to VS Code when the user declines", async () => {
+    setTransportElicitor(async () => undefined)
+
+    await expect(selectTransport("/path", "DEVC", mockClient)).rejects.toThrow(
+      "Transport selection cancelled"
+    )
+    expect(mockWindow.showQuickPick).not.toHaveBeenCalled()
+  })
+
+  it("fails with a clear error when no transport can hold the object", async () => {
+    mockClient.transportInfo.mockResolvedValue({
+      LOCKS: null,
+      TRANSPORTS: [],
+      DLVUNIT: "",
+      OBJECT: "PROG",
+      OBJECTNAME: "ZPROG"
+    })
+    setTransportElicitor(jest.fn(async () => "T001"))
+
+    await expect(selectTransport("/path", "DEVC", mockClient)).rejects.toThrow(
+      "A transport request is required"
+    )
+    expect(mockWindow.showQuickPick).not.toHaveBeenCalled()
+  })
+
+  it("still returns the locking transport without prompting", async () => {
+    mockClient.transportInfo.mockResolvedValue({
+      LOCKS: { HEADER: { TRKORR: "T009" } },
+      TRANSPORTS: [],
+      DLVUNIT: ""
+    })
+    const elicitor = jest.fn(async () => "T001")
+    setTransportElicitor(elicitor)
+
+    const result = await selectTransport("/path", "DEVC", mockClient)
+    expect(result.transport).toBe("T009")
+    expect(elicitor).not.toHaveBeenCalled()
+  })
+
+  it("still resolves local objects without prompting", async () => {
+    mockClient.transportInfo.mockResolvedValue({
+      LOCKS: null,
+      TRANSPORTS: [],
+      DLVUNIT: "LOCAL",
+      OBJECT: "PROG",
+      OBJECTNAME: "ZPROG"
+    })
+    const elicitor = jest.fn(async () => "T001")
+    setTransportElicitor(elicitor)
+
+    const result = await selectTransport("/path", "DEVC", mockClient)
+    expect(result.transport).toBe("")
+    expect(elicitor).not.toHaveBeenCalled()
   })
 })

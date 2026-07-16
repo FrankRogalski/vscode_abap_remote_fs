@@ -27,14 +27,7 @@ import { createMcpAuthorizedOptions } from "./lm-tools/toolGuard"
 import { funWindow as window } from "./funMessenger"
 import { executeReplace } from "./lm-tools/mcpReplaceStringTool"
 import { getDiagnosticsForUri } from "./lm-tools/mcpGetDiagnosticsTool"
-import { connectedRoots } from "../config"
-import {
-  clearMcpWorkingTransport,
-  getMcpWorkingTransport,
-  promptMcpTransport,
-  setTransportElicitor,
-  TransportElicitor
-} from "../adt/mcpTransportSelection"
+import { setTransportElicitor, TransportElicitor } from "../adt/mcpTransportSelection"
 
 // ============================================================================
 // TYPES
@@ -221,27 +214,9 @@ export function jsonSchemaToZod(
 // Tag used to identify ABAP FS tools
 const ABAP_FS_TAG = "abap-fs"
 
-/** Build an MCP text tool result. */
-function textResult(text: string, isError = false) {
-  const result: { content: { type: "text"; text: string }[]; isError?: boolean } = {
-    content: [{ type: "text", text }]
-  }
-  if (isError) result.isError = true
-  return result
-}
-
-/** Resolve the connection for the working-transport tool: the given id, or the
- *  sole connected system when unambiguous. */
-function resolveWorkingTransportConnId(connectionId?: string): string {
-  if (connectionId) return connectionId
-  const ids = Array.from(connectedRoots().keys())
-  if (ids.length === 1) return ids[0]
-  if (ids.length === 0)
-    throw new Error("No SAP system is connected. Open an ABAP workspace folder first.")
-  throw new Error(
-    `Multiple systems are connected (${ids.join(", ")}). Provide connectionId to choose one.`
-  )
-}
+// Number of MCP tool invocations currently in flight (across all sessions);
+// the transport elicitor stays registered while it is > 0
+let activeElicitorCalls = 0
 
 /**
  * Create an MCP server that dynamically wraps all VS Code LM tools
@@ -252,59 +227,61 @@ function createMcpServer(): McpServer {
     version: "1.0.0"
   })
 
-  // Ask the connected MCP client to pick the transport that AI/MCP writes are
-  // assigned to. Returns the chosen TRKORR, "" for a local object, or undefined
-  // when the client cannot elicit / the user declined (callers then fall back to
-  // the normal interactive prompt).
+  // Ask the connected MCP client to pick the transport for the object being
+  // written. Returns the chosen TRKORR, undefined when the user declined, and
+  // throws when the client cannot elicit at all — MCP writes never fall back
+  // to the VS Code prompt.
   const makeElicitor =
     (mcp: McpServer): TransportElicitor =>
-    async (connId, choices) => {
-      const values = ["", ...choices.map(c => c.transport)]
-      const names = [
-        "Local / no transport",
-        ...choices.map(c => `${c.transport} — ${c.description}`)
-      ]
+    async (objDescription, choices) => {
+      let result
       try {
-        const result = await mcp.server.elicitInput({
+        result = await mcp.server.elicitInput({
           mode: "form",
-          message: `Select the transport request for AI changes on "${connId}" (choose "Local / no transport" for local objects):`,
+          message: `Select the transport request for AI changes to "${objDescription}":`,
           requestedSchema: {
             type: "object",
             properties: {
               transport: {
                 type: "string",
                 title: "Transport request",
-                description:
-                  "Transport that AI/MCP-created objects and objects edited for the first time are assigned to",
-                enum: values,
-                enumNames: names
+                description: "Transport the changed object is assigned to",
+                enum: choices.map(c => c.transport),
+                enumNames: choices.map(c => `${c.transport} — ${c.description}`)
               }
             },
             required: ["transport"]
           }
         })
-        if (result.action !== "accept") return undefined
-        const chosen = result.content?.transport
-        return typeof chosen === "string" ? chosen : undefined
       } catch (error) {
-        // Most commonly the client does not advertise the elicitation
-        // capability; fall back to the normal interactive prompt.
-        log(
-          `MCP transport elicitation unavailable: ${error instanceof Error ? error.message : String(error)}`
+        // Most commonly the client does not advertise the elicitation capability
+        const message = error instanceof Error ? error.message : String(error)
+        log(`MCP transport elicitation unavailable: ${message}`)
+        throw new Error(
+          `A transport request is required for "${objDescription}", but this MCP client does not support ` +
+            `elicitation (${message}). Ask the user which transport to use, then retry after they have ` +
+            `assigned one (e.g. by editing the object once in VS Code).`
         )
-        return undefined
       }
+      if (result.action !== "accept") return undefined
+      const chosen = result.content?.transport
+      return typeof chosen === "string" ? chosen : undefined
     }
 
   // Register the elicitor only while a tool invocation runs, so transport
   // selection is asked through the client for MCP writes but never for VS Code
-  // Copilot / manual edits.
+  // Copilot / manual edits. Refcounted across sessions: with overlapping tool
+  // calls the elicitor must stay registered until the last one finishes, or an
+  // MCP write could fall back to the VS Code prompt. (With two different
+  // clients writing at the same instant the prompt may reach the wrong one —
+  // it still always reaches a human.)
   const withTransportElicitor = async <T>(fn: () => Promise<T>): Promise<T> => {
+    activeElicitorCalls++
     setTransportElicitor(makeElicitor(server))
     try {
       return await fn()
     } finally {
-      setTransportElicitor(undefined)
+      if (--activeElicitorCalls === 0) setTransportElicitor(undefined)
     }
   }
 
@@ -482,79 +459,6 @@ function createMcpServer(): McpServer {
             ],
             isError: true
           }
-        }
-      })
-  )
-
-  // Select Working Transport - asks the user (through the MCP client) to pick
-  // the transport that AI/MCP writes are assigned to for the rest of the session
-  server.registerTool(
-    "select_working_transport",
-    {
-      title: "Select Working Transport",
-      description:
-        "Ask the user (through this MCP client) to pick the transport request that AI/MCP-created objects, " +
-        "and objects edited for the first time, should be assigned to. The choice is remembered per connection " +
-        "for the rest of the session so later writes do not prompt again.\n\n" +
-        "Actions:\n" +
-        "- select (default): prompt the user to choose a transport now.\n" +
-        "- status: report the transport currently remembered for the connection.\n" +
-        "- clear: forget the remembered transport so the next write asks again.\n\n" +
-        "Provide connectionId (the SAP connection/system name, e.g. from get_connected_systems). " +
-        "It may be omitted only when exactly one system is connected.",
-      inputSchema: {
-        action: z
-          .enum(["select", "status", "clear"])
-          .optional()
-          .describe("What to do. Defaults to 'select'."),
-        connectionId: z
-          .string()
-          .optional()
-          .describe(
-            "SAP connection/system name. Optional when a single system is connected; required otherwise."
-          )
-      }
-    },
-    async (args: Record<string, unknown>) =>
-      withTransportElicitor(async () => {
-        try {
-          const action = (args.action as string) || "select"
-          const connId = resolveWorkingTransportConnId(args.connectionId as string | undefined)
-
-          if (action === "status") {
-            const current = getMcpWorkingTransport(connId)
-            return textResult(
-              current
-                ? `Working transport for "${connId}": ${current}`
-                : `No working transport set for "${connId}" — the user is asked on the next AI create / first edit.`
-            )
-          }
-
-          if (action === "clear") {
-            clearMcpWorkingTransport(connId)
-            return textResult(
-              `Cleared the working transport for "${connId}" — the next AI create / first edit will ask again.`
-            )
-          }
-
-          const chosen = await promptMcpTransport(connId)
-          if (chosen === undefined) {
-            const current = getMcpWorkingTransport(connId)
-            return textResult(
-              current === undefined
-                ? `No transport was selected for "${connId}" (cancelled, unsupported client, or no modifiable transports). ` +
-                    `AI writes will use local objects or fall back to the interactive prompt.`
-                : `Working transport for "${connId}" set to local / no transport. Objects will be created as local.`
-            )
-          }
-          return textResult(
-            `Working transport for "${connId}" set to ${chosen}. AI-created and first-edited objects will be assigned to it.`
-          )
-        } catch (error) {
-          return textResult(
-            `❌ Error: ${error instanceof Error ? error.message : String(error)}`,
-            true
-          )
         }
       })
   )

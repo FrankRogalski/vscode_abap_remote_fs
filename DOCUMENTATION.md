@@ -308,7 +308,6 @@ All 40 ABAP FS tools are exposed, including:
 | `abap_activate`             | Activate ABAP objects              |
 | `replace_string_in_abap_object` | Edit ABAP source code (find & replace) |
 | `get_abap_diagnostics`      | Get syntax errors/warnings for a file  |
-| `select_working_transport`  | Ask you to pick the transport AI writes use |
 
 ## Write Support
 
@@ -323,15 +322,9 @@ Edits are immediately synced to SAP (ABAP FS handles locking, saving, and unlock
 
 ### Choosing a Transport
 
-When an AI/MCP write needs a transport request — creating an object, or editing a transportable object for the first time — the MCP server asks **you** to pick one through your AI client (this uses MCP _elicitation_, so the prompt appears in the client, not in VS Code). Your choice is remembered per connection for the rest of the session, so a single task that touches several objects only asks once.
+When an AI/MCP write needs a transport request — creating an object, or editing a transportable object that is not yet locked into one — the MCP server asks **you** to pick from the transports SAP proposes for that object, through your AI client (this uses MCP _elicitation_, so the prompt appears in the client, not in VS Code). Nothing is remembered: every write that needs a transport asks again.
 
-Call `select_working_transport` to control it explicitly:
-
-- `select` (default) — pick the transport now
-- `status` — show the transport currently in use
-- `clear` — forget it, so the next write asks again
-
-Pass `connectionId` when more than one SAP system is connected. If your AI client does not support elicitation, transport selection falls back to the normal prompt inside VS Code.
+MCP writes never fall back to the VS Code prompt. If you decline the prompt, or your AI client does not support elicitation, the write fails with an explanatory error instead. Non-MCP flows (VS Code Copilot, manual edits) keep using the normal transport picker inside VS Code.
 
 
 ## Limitations

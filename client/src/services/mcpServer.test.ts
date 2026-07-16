@@ -68,14 +68,8 @@ jest.mock("./lm-tools/toolGuard", () => ({
   isToolInvocationAuthorized: jest.fn(() => true)
 }))
 
-// Avoid pulling the heavy config -> extension and adt/conections import chains
-// into this unit test (both eagerly load the whole extension surface).
-jest.mock("../config", () => ({ connectedRoots: () => new Map() }))
 jest.mock("../adt/mcpTransportSelection", () => ({
-  setTransportElicitor: jest.fn(),
-  getMcpWorkingTransport: jest.fn(),
-  clearMcpWorkingTransport: jest.fn(),
-  promptMcpTransport: jest.fn()
+  setTransportElicitor: jest.fn()
 }))
 import * as vscode from "vscode"
 import {

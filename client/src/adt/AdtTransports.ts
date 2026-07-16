@@ -4,7 +4,7 @@ import { ADTClient, TransportInfo } from "abap-adt-api"
 import { fieldOrder, withp } from "../lib"
 import { TransportValidator } from "../api"
 import { uriRoot, getClient } from "./conections"
-import { resolveMcpTransport } from "./mcpTransportSelection"
+import { elicitTransport, hasTransportElicitor } from "./mcpTransportSelection"
 import { isAbapStat, isAbapFolder } from "abapfs"
 
 export interface TransportSelection {
@@ -51,6 +51,25 @@ async function selectOrCreate(
   } else return trSel(selection.split(" ")[0] || "")
 }
 
+// Ask the connected MCP client (via elicitation) to pick one of the transports
+// SAP proposes for the object. MCP writes never show the VS Code prompt: a
+// declined or unsupported elicitation fails the operation instead.
+async function elicitFromMcp(tranInfo: TransportInfo, objContentPath: string) {
+  const choices = tranInfo.TRANSPORTS.sort(fieldOrder("TRKORR", true)).map(t => ({
+    transport: t.TRKORR,
+    description: t.AS4TEXT
+  }))
+  if (choices.length === 0)
+    throw new Error(
+      `A transport request is required for ${objContentPath}, but you have none it can be assigned to. ` +
+        `Ask the user to create one (in VS Code or SAP) and retry.`
+    )
+  const chosen = await elicitTransport(objContentPath, choices)
+  if (chosen === undefined)
+    throw new Error(`Transport selection cancelled - no transport chosen for ${objContentPath}`)
+  return trSel(chosen)
+}
+
 export async function selectTransport(
   objContentPath: string,
   devClass: string,
@@ -71,7 +90,9 @@ export async function selectTransport(
   // if local, return an empty value
   if (ti.DLVUNIT === "LOCAL") return trSel("")
 
-  let selection = await selectOrCreate(ti, objContentPath, client, transportLayer)
+  let selection = hasTransportElicitor()
+    ? await elicitFromMcp(ti, objContentPath)
+    : await selectOrCreate(ti, objContentPath, client, transportLayer)
   if (!selection.cancelled)
     selection = await validate(selection.transport, ti.OBJECT, ti.OBJECTNAME, devClass)
   return selection
@@ -162,11 +183,7 @@ export const selectTransportIfNeeded = async (uri: Uri) => {
       const { transport } = status
       const path = isAbapFolder(file) ? file.object.path : file.object.contentsPath()
       const client = getClient(uri.authority)
-      // On a first touch the fresh lock has no transport yet: ask the connected
-      // MCP client to pick one so AI/MCP writes are not blocked by the
-      // interactive prompt (no MCP / cancelled -> ask as before).
-      const current = transport || (await resolveMcpTransport(uri.authority)) || ""
-      const trsel = await selectTransport(path, "", client, false, current)
+      const trsel = await selectTransport(path, "", client, false, transport)
       if (trsel.cancelled) throw new Error("Transport required")
       return trsel
 
