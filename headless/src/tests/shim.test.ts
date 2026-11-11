@@ -3,7 +3,10 @@ import { TextDocument, runtime } from "../vscode/impl"
 
 describe("vscode shim", () => {
   it("TextDocument maps offsets and lines", () => {
-    const doc = new TextDocument(Uri.parse("adt://dev100/a.prog.abap"), "REPORT z.\r\nWRITE 1.\nWRITE 2.")
+    const doc = new TextDocument(
+      Uri.parse("adt://dev100/a.prog.abap"),
+      "REPORT z.\r\nWRITE 1.\nWRITE 2."
+    )
     expect(doc.languageId).toBe("abap")
     expect(doc.lineCount).toBe(3)
     expect(doc.lineAt(1).text).toBe("WRITE 1.")

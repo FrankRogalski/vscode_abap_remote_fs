@@ -14,9 +14,7 @@ const ts = require("typescript")
 const dtsPath = require.resolve("@types/vscode/index.d.ts")
 const sf = ts.createSourceFile(dtsPath, readFileSync(dtsPath, "utf8"), ts.ScriptTarget.Latest, true)
 
-const vscodeModule = sf.statements.find(
-  s => ts.isModuleDeclaration(s) && s.name.text === "vscode"
-)
+const vscodeModule = sf.statements.find(s => ts.isModuleDeclaration(s) && s.name.text === "vscode")
 if (!vscodeModule?.body) throw new Error("declare module 'vscode' not found")
 
 const enums = new Map()
@@ -37,10 +35,14 @@ function evalInit(expr, members) {
     const l = evalInit(expr.left, members)
     const r = evalInit(expr.right, members)
     switch (expr.operatorToken.kind) {
-      case ts.SyntaxKind.LessThanLessThanToken: return l << r
-      case ts.SyntaxKind.BarToken: return l | r
-      case ts.SyntaxKind.PlusToken: return l + r
-      case ts.SyntaxKind.AsteriskToken: return l * r
+      case ts.SyntaxKind.LessThanLessThanToken:
+        return l << r
+      case ts.SyntaxKind.BarToken:
+        return l | r
+      case ts.SyntaxKind.PlusToken:
+        return l + r
+      case ts.SyntaxKind.AsteriskToken:
+        return l * r
     }
   }
   throw new Error(`Unsupported enum initializer: ${expr.getText()}`)
@@ -81,7 +83,8 @@ const lines = [
 ]
 for (const [name, members] of enums) {
   lines.push(`export enum ${name} {`)
-  for (const [m, v] of members) lines.push(`  ${/^\w+$/.test(m) ? m : JSON.stringify(m)} = ${JSON.stringify(v)},`)
+  for (const [m, v] of members)
+    lines.push(`  ${/^\w+$/.test(m) ? m : JSON.stringify(m)} = ${JSON.stringify(v)},`)
   lines.push("}")
 }
 for (const name of classes)
@@ -97,7 +100,10 @@ for (const name of functions)
 
 const out = join(here, "..", "src", "vscode", "index.ts")
 mkdirSync(dirname(out), { recursive: true })
-writeFileSync(out, lines.join("\n") + "\n")
+// formatted with the repository's prettier config, so upstream's format:check stays green
+const prettier = require("prettier")
+const options = (await prettier.resolveConfig(out)) ?? {}
+writeFileSync(out, await prettier.format(lines.join("\n") + "\n", { ...options, filepath: out }))
 console.log(
   `vscode shim: ${enums.size} enums, ${classes.size} classes, ${namespaces.size} namespaces, ${values.size} values, ${functions.size} functions`
 )

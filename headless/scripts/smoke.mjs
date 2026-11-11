@@ -23,7 +23,9 @@ const configPath = join(dir, "config.json")
 writeFileSync(
   configPath,
   JSON.stringify({
-    systems: { smoke100: { url: "http://127.0.0.1:9", username: "SMOKE", password: "x", client: "100" } },
+    systems: {
+      smoke100: { url: "http://127.0.0.1:9", username: "SMOKE", password: "x", client: "100" }
+    },
     stateDir: join(dir, "state"),
     logLevel: "error"
   })
@@ -55,7 +57,12 @@ try {
   report.missingFromManifest = expected.filter(n => !served.has(n))
   if (report.missingFromManifest.length)
     fail(`upstream tools not served headless: ${report.missingFromManifest.join(", ")}`)
-  for (const name of ["abapfs_search_objects", "abapfs_get_object_source", "replace_string_in_abap_object", "get_abap_diagnostics"])
+  for (const name of [
+    "abapfs_search_objects",
+    "abapfs_get_object_source",
+    "replace_string_in_abap_object",
+    "get_abap_diagnostics"
+  ])
     if (!tools.some(t => t.name === name)) fail(`core tool missing: ${name}`)
 
   const call = async (name, args, check) => {
@@ -71,12 +78,26 @@ try {
     }
   }
   // offline tools: must succeed
-  await call("abapfs_get_configured_systems", {}, (r, t) => (r.isError ? t : !/smoke100/i.test(t) && "system not listed"))
-  await call("abapfs_get_sql_syntax", {}, (r, t) => (r.isError ? t : t.length < 200 && "suspiciously short"))
-  await call("abapfs_search_documentation", { action: "search_documentation", searchQuery: "transport" }, r => r.isError && "error")
+  await call("abapfs_get_configured_systems", {}, (r, t) =>
+    r.isError ? t : !/smoke100/i.test(t) && "system not listed"
+  )
+  await call("abapfs_get_sql_syntax", {}, (r, t) =>
+    r.isError ? t : t.length < 200 && "suspiciously short"
+  )
+  await call(
+    "abapfs_search_documentation",
+    { action: "search_documentation", searchQuery: "transport" },
+    r => r.isError && "error"
+  )
   // online tool against an unreachable system: must fail cleanly, not crash the server
-  await call("abapfs_search_objects", { connectionId: "smoke100", pattern: "CL_ABAP_TYPEDESCR", types: ["CLAS"] }, () => undefined)
-  const again = await client.listTools().catch(e => fail(`server died after failed SAP call: ${e.message}`))
+  await call(
+    "abapfs_search_objects",
+    { connectionId: "smoke100", pattern: "CL_ABAP_TYPEDESCR", types: ["CLAS"] },
+    () => undefined
+  )
+  const again = await client
+    .listTools()
+    .catch(e => fail(`server died after failed SAP call: ${e.message}`))
   if (again && again.tools.length !== tools.length) fail("tool list changed after calls")
 } catch (e) {
   fail(`MCP session failed: ${e.message}`)

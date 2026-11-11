@@ -20,7 +20,10 @@ const envName = (id: string) => `ABAPFS_${id.toUpperCase().replace(/[^A-Z0-9]/g,
 
 export function configFromVscodeSettings(settingsPath?: string) {
   const path = settingsPath ?? vscodeSettingsCandidates().find(p => existsSync(p))
-  if (!path || !existsSync(path)) throw new Error(`VS Code settings not found (looked in ${vscodeSettingsCandidates().join(", ")})`)
+  if (!path || !existsSync(path))
+    throw new Error(
+      `VS Code settings not found (looked in ${vscodeSettingsCandidates().join(", ")})`
+    )
   const errors: ParseError[] = []
   const settings = parse(readFileSync(path, "utf8"), errors, { allowTrailingComma: true }) ?? {}
   if (errors.length) throw new Error(`Cannot parse ${path}`)
@@ -28,7 +31,8 @@ export function configFromVscodeSettings(settingsPath?: string) {
   // settings may be flat ("abapfs.remote") or nested ({ abapfs: { remote } })
   const flat: Record<string, unknown> = {}
   for (const [k, v] of Object.entries<any>(settings)) {
-    if (k === "abapfs" && v && typeof v === "object") for (const [k2, v2] of Object.entries(v)) flat[`abapfs.${k2}`] = v2
+    if (k === "abapfs" && v && typeof v === "object")
+      for (const [k2, v2] of Object.entries(v)) flat[`abapfs.${k2}`] = v2
     else if (k.startsWith("abapfs.")) flat[k] = v
   }
   const remotes = (flat["abapfs.remote"] ?? {}) as Record<string, Record<string, unknown>>
@@ -49,5 +53,9 @@ export function configFromVscodeSettings(settingsPath?: string) {
     }
     systems[id] = sys
   }
-  return { source: path, env, config: { systems, mcp: { transport: "stdio", port: 4847 }, settings: flat, logLevel: "warn" } }
+  return {
+    source: path,
+    env,
+    config: { systems, mcp: { transport: "stdio", port: 4847 }, settings: flat, logLevel: "warn" }
+  }
 }

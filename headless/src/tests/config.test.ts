@@ -3,7 +3,9 @@ import { applyConfig, referencedSystems } from "../activate"
 import { runtime } from "../vscode/impl"
 import { workspace } from "../vscode/index"
 
-const base = { systems: { dev100: { url: "https://h:443", username: "DEV", password: "secret", client: "100" } } }
+const base = {
+  systems: { dev100: { url: "https://h:443", username: "DEV", password: "secret", client: "100" } }
+}
 
 describe("config", () => {
   it("interpolates ${env:VAR} and fails on unset variables", () => {
@@ -17,13 +19,22 @@ describe("config", () => {
     const { join } = await import("node:path")
     const { tmpdir } = await import("node:os")
     const file = join(mkdtempSync(join(tmpdir(), "abapfs-")), "c.json")
-    writeFileSync(file, JSON.stringify({ systems: {
-      ok1: { url: "u", username: "a", password: "plain" },
-      bad: { url: "u", username: "b", password: "${env:ABAPFS_TEST_UNSET_PW}" } } }))
+    writeFileSync(
+      file,
+      JSON.stringify({
+        systems: {
+          ok1: { url: "u", username: "a", password: "plain" },
+          bad: { url: "u", username: "b", password: "${env:ABAPFS_TEST_UNSET_PW}" }
+        }
+      })
+    )
     const cfg = loadConfig(file)
     expect(resolvePassword(cfg.systems.ok1!)).toBe("plain")
     expect(() => resolvePassword(cfg.systems.bad!)).toThrow(/ABAPFS_TEST_UNSET_PW is not set/)
-    writeFileSync(file, JSON.stringify({ systems: { ok1: { url: "${env:ABAPFS_TEST_UNSET_URL}", username: "a" } } }))
+    writeFileSync(
+      file,
+      JSON.stringify({ systems: { ok1: { url: "${env:ABAPFS_TEST_UNSET_URL}", username: "a" } } })
+    )
     expect(() => loadConfig(file)).toThrow(/ABAPFS_TEST_UNSET_URL is not set/)
   })
 
@@ -32,11 +43,17 @@ describe("config", () => {
     expect(cfg.mcp).toMatchObject({ transport: "stdio", port: 4847, exposeEditTool: true })
     expect(cfg.systems.dev100!.language).toBe("EN")
     expect(() => parseConfig({ ...base, bogus: 1 })).toThrow(/bogus/)
-    expect(() => parseConfig({ systems: { x: { url: "u", username: "u" } } })).toThrow(/3\+ characters/)
+    expect(() => parseConfig({ systems: { x: { url: "u", username: "u" } } })).toThrow(
+      /3\+ characters/
+    )
   })
 
   it("keeps extra abapfs.remote fields on systems", () => {
-    const cfg = parseConfig({ systems: { dev100: { ...base.systems.dev100, sapGui: { server: "h" }, oauth: { clientId: "c" } } } })
+    const cfg = parseConfig({
+      systems: {
+        dev100: { ...base.systems.dev100, sapGui: { server: "h" }, oauth: { clientId: "c" } }
+      }
+    })
     expect((cfg.systems.dev100 as any).oauth).toEqual({ clientId: "c" })
   })
 })
@@ -44,7 +61,10 @@ describe("config", () => {
 describe("applyConfig", () => {
   it("maps systems to abapfs.remote without secrets and exposes passwords as secrets", async () => {
     const resolvers = applyConfig(
-      parseConfig({ ...base, settings: { "abapfs.atc": { autoRefresh: false }, abapfs: { custom: { x: 1 } } } })
+      parseConfig({
+        ...base,
+        settings: { "abapfs.atc": { autoRefresh: false }, abapfs: { custom: { x: 1 } } }
+      })
     )
     const remote = workspace.getConfiguration("abapfs").get("remote")
     expect(remote.dev100).toMatchObject({ url: "https://h:443", username: "DEV" })

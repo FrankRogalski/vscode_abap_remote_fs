@@ -17,7 +17,8 @@ import { log } from "../log"
 
 // vscode.Uri has a few statics vscode-uri keeps in Utils
 const UriClass = URI as any
-if (!UriClass.joinPath) UriClass.joinPath = (base: URI, ...paths: string[]) => Utils.joinPath(base, ...paths)
+if (!UriClass.joinPath)
+  UriClass.joinPath = (base: URI, ...paths: string[]) => Utils.joinPath(base, ...paths)
 export const Uri = UriClass as typeof URI & { joinPath(base: URI, ...p: string[]): URI }
 
 export class Disposable {
@@ -65,7 +66,10 @@ export class CancellationError extends Error {
 export class CancellationTokenSource {
   private emitter = new EventEmitter<void>()
   private cancelled = false
-  readonly token: { readonly isCancellationRequested: boolean; onCancellationRequested: EventEmitter<void>["event"] }
+  readonly token: {
+    readonly isCancellationRequested: boolean
+    onCancellationRequested: EventEmitter<void>["event"]
+  }
   constructor() {
     const isCancelled = () => this.cancelled
     this.token = {
@@ -109,13 +113,23 @@ export class Position {
   compareTo(o: Position) {
     return this.isBefore(o) ? -1 : this.isEqual(o) ? 0 : 1
   }
-  translate(lineDelta: number | { lineDelta?: number; characterDelta?: number } = 0, characterDelta = 0) {
+  translate(
+    lineDelta: number | { lineDelta?: number; characterDelta?: number } = 0,
+    characterDelta = 0
+  ) {
     if (typeof lineDelta === "object")
-      return new Position(this.line + (lineDelta.lineDelta ?? 0), this.character + (lineDelta.characterDelta ?? 0))
+      return new Position(
+        this.line + (lineDelta.lineDelta ?? 0),
+        this.character + (lineDelta.characterDelta ?? 0)
+      )
     return new Position(this.line + lineDelta, this.character + characterDelta)
   }
-  with(line: number | { line?: number; character?: number } = this.line, character = this.character) {
-    if (typeof line === "object") return new Position(line.line ?? this.line, line.character ?? this.character)
+  with(
+    line: number | { line?: number; character?: number } = this.line,
+    character = this.character
+  ) {
+    if (typeof line === "object")
+      return new Position(line.line ?? this.line, line.character ?? this.character)
     return new Position(line, character)
   }
 }
@@ -147,7 +161,10 @@ export class Range {
     return start.isAfter(end) ? undefined : new Range(start, end)
   }
   union(o: Range) {
-    return new Range(this.start.isBefore(o.start) ? this.start : o.start, this.end.isAfter(o.end) ? this.end : o.end)
+    return new Range(
+      this.start.isBefore(o.start) ? this.start : o.start,
+      this.end.isAfter(o.end) ? this.end : o.end
+    )
   }
   with(start: Position | { start?: Position; end?: Position } = this.start, end = this.end) {
     if (start instanceof Position) return new Range(start, end)
@@ -173,7 +190,10 @@ export class Location {
     readonly uri: URI,
     rangeOrPosition: Range | Position
   ) {
-    this.range = rangeOrPosition instanceof Position ? new Range(rangeOrPosition, rangeOrPosition) : rangeOrPosition
+    this.range =
+      rangeOrPosition instanceof Position
+        ? new Range(rangeOrPosition, rangeOrPosition)
+        : rangeOrPosition
   }
 }
 
@@ -381,9 +401,17 @@ const configChanged = new EventEmitter<{ affectsConfiguration(section: string): 
 const foldersChanged = new EventEmitter<{ added: unknown[]; removed: unknown[] }>()
 const docOpened = new EventEmitter<TextDocument>()
 const docClosed = new EventEmitter<TextDocument>()
-const docChanged = new EventEmitter<{ document: TextDocument; contentChanges: unknown[]; reason?: number }>()
+const docChanged = new EventEmitter<{
+  document: TextDocument
+  contentChanges: unknown[]
+  reason?: number
+}>()
 const docSaved = new EventEmitter<TextDocument>()
-const docWillSave = new EventEmitter<{ document: TextDocument; reason: number; waitUntil(p: unknown): void }>()
+const docWillSave = new EventEmitter<{
+  document: TextDocument
+  reason: number
+  waitUntil(p: unknown): void
+}>()
 const diagnosticsChanged = new EventEmitter<{ uris: URI[] }>()
 
 export const runtime = {
@@ -405,11 +433,17 @@ export const runtime = {
   beforeToolInvoke: undefined as undefined | ((name: string, input: unknown) => Promise<void>),
   setSetting(key: string, value: unknown) {
     runtime.settings.set(key, value)
-    configChanged.fire({ affectsConfiguration: (s: string) => key === s || key.startsWith(`${s}.`) })
+    configChanged.fire({
+      affectsConfiguration: (s: string) => key === s || key.startsWith(`${s}.`)
+    })
   },
   setFolders(ids: string[]) {
     const removed = runtime.folders
-    runtime.folders = ids.map((id, index) => ({ uri: URI.parse(`adt://${id.toLowerCase()}/`), name: id, index }))
+    runtime.folders = ids.map((id, index) => ({
+      uri: URI.parse(`adt://${id.toLowerCase()}/`),
+      name: id,
+      index
+    }))
     foldersChanged.fire({ added: runtime.folders, removed })
   },
   provider(uri: URI) {
@@ -472,10 +506,25 @@ function getConfiguration(section?: string) {
 
 const languageOf = (uri: URI) => {
   const p = uri.path.toLowerCase()
-  if (/\.(asddls|acds|ddls\.asddls|dcls|asdcls|ddlx|asddlxs|ddla|asbdef|srvdsrv)$/.test(p) || p.endsWith(".cds")) return "abap_cds"
+  if (
+    /\.(asddls|acds|ddls\.asddls|dcls|asdcls|ddlx|asddlxs|ddla|asbdef|srvdsrv)$/.test(p) ||
+    p.endsWith(".cds")
+  )
+    return "abap_cds"
   if (p.endsWith(".abap")) return "abap"
   const ext = extname(p).slice(1)
-  return ({ json: "json", md: "markdown", ts: "typescript", js: "javascript", xml: "xml", txt: "plaintext" } as Record<string, string>)[ext] ?? "plaintext"
+  return (
+    (
+      {
+        json: "json",
+        md: "markdown",
+        ts: "typescript",
+        js: "javascript",
+        xml: "xml",
+        txt: "plaintext"
+      } as Record<string, string>
+    )[ext] ?? "plaintext"
+  )
 }
 
 export class TextDocument {
@@ -563,7 +612,10 @@ export class TextDocument {
 }
 
 async function openTextDocument(arg?: URI | string | { content?: string; language?: string }) {
-  if (arg === undefined || (typeof arg === "object" && !(arg instanceof URI) && !("scheme" in arg))) {
+  if (
+    arg === undefined ||
+    (typeof arg === "object" && !(arg instanceof URI) && !("scheme" in arg))
+  ) {
     const opts = (arg ?? {}) as { content?: string; language?: string }
     const uri = URI.parse(`untitled:Untitled-${runtime.documents.size + 1}`)
     const doc = new TextDocument(uri, opts.content ?? "", opts.language)
@@ -593,8 +645,14 @@ async function applyEdit(edit: WorkspaceEdit) {
   for (const [uri, edits] of edit.entries()) {
     const doc = await openTextDocument(uri)
     let text = doc.getText()
-    const sorted = [...edits].sort((a, b) => doc.offsetAt(b.range.start) - doc.offsetAt(a.range.start))
-    for (const e of sorted) text = text.slice(0, doc.offsetAt(e.range.start)) + e.newText + text.slice(doc.offsetAt(e.range.end))
+    const sorted = [...edits].sort(
+      (a, b) => doc.offsetAt(b.range.start) - doc.offsetAt(a.range.start)
+    )
+    for (const e of sorted)
+      text =
+        text.slice(0, doc.offsetAt(e.range.start)) +
+        e.newText +
+        text.slice(doc.offsetAt(e.range.end))
     doc.setText(text)
   }
   return true
@@ -651,7 +709,8 @@ const fsApi = {
   },
   delete: async (uri: URI, options: { recursive?: boolean; useTrash?: boolean } = {}) =>
     providerFor(uri).delete(uri, { recursive: !!options.recursive }),
-  rename: async (a: URI, b: URI, o: { overwrite?: boolean } = {}) => providerFor(a).rename(a, b, { overwrite: !!o.overwrite }),
+  rename: async (a: URI, b: URI, o: { overwrite?: boolean } = {}) =>
+    providerFor(a).rename(a, b, { overwrite: !!o.overwrite }),
   copy: async (a: URI, b: URI, o: { overwrite?: boolean } = {}) => {
     const p = providerFor(a)
     if (p.copy && providerFor(b) === p) return p.copy(a, b, { overwrite: !!o.overwrite })
@@ -679,14 +738,24 @@ export const workspace = {
     return [...runtime.documents.values()]
   },
   getWorkspaceFolder(uri: URI) {
-    return runtime.folders.find(f => f.uri.scheme === uri.scheme && f.uri.authority === uri.authority)
+    return runtime.folders.find(
+      f => f.uri.scheme === uri.scheme && f.uri.authority === uri.authority
+    )
   },
   asRelativePath(p: URI | string) {
     if (typeof p === "string") return p
     return p.scheme === "file" ? p.fsPath : p.path
   },
-  updateWorkspaceFolders(start: number, deleteCount: number | undefined | null, ...add: { uri: URI; name?: string }[]) {
-    const removed = runtime.folders.splice(start, deleteCount ?? 0, ...add.map(a => ({ uri: a.uri, name: a.name ?? a.uri.authority, index: 0 })))
+  updateWorkspaceFolders(
+    start: number,
+    deleteCount: number | undefined | null,
+    ...add: { uri: URI; name?: string }[]
+  ) {
+    const removed = runtime.folders.splice(
+      start,
+      deleteCount ?? 0,
+      ...add.map(a => ({ uri: a.uri, name: a.name ?? a.uri.authority, index: 0 }))
+    )
     runtime.folders.forEach((f, i) => (f.index = i))
     foldersChanged.fire({ added: add, removed })
     return true
@@ -711,7 +780,11 @@ export const workspace = {
   async findFiles(include: unknown, _exclude?: unknown, maxResults?: number) {
     // only supports file globs relative to a RelativePattern base folder
     const rp = include instanceof RelativePattern ? include : undefined
-    const base = rp && (typeof rp.base === "string" ? rp.base : (rp.base as any)?.fsPath ?? (rp.base as any)?.uri?.fsPath)
+    const base =
+      rp &&
+      (typeof rp.base === "string"
+        ? rp.base
+        : ((rp.base as any)?.fsPath ?? (rp.base as any)?.uri?.fsPath))
     if (!base || !existsSync(base)) return []
     const results: URI[] = []
     for await (const f of fsp.glob(rp!.pattern, { cwd: base })) {
@@ -740,14 +813,24 @@ export const workspace = {
 const message =
   (level: "info" | "warn" | "error") =>
   async (msg: string, ...rest: unknown[]) => {
-    const items = rest.filter(r => typeof r === "string" || (r && typeof r === "object" && "title" in (r as object)))
-    log[level](items.length ? `${msg} [choices: ${items.map(i => (typeof i === "string" ? i : (i as any).title)).join(", ")} — none chosen, headless]` : msg)
+    const items = rest.filter(
+      r => typeof r === "string" || (r && typeof r === "object" && "title" in (r as object))
+    )
+    log[level](
+      items.length
+        ? `${msg} [choices: ${items.map(i => (typeof i === "string" ? i : (i as any).title)).join(", ")} — none chosen, headless]`
+        : msg
+    )
     return undefined
   }
 
 function outputChannel(name: string) {
-  const write = (level: "info" | "warn" | "error" | "debug") => (m: unknown, ...args: unknown[]) =>
-    log[level](`[${name}] ${[m, ...args].map(a => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")}`.trimEnd())
+  const write =
+    (level: "info" | "warn" | "error" | "debug") =>
+    (m: unknown, ...args: unknown[]) =>
+      log[level](
+        `[${name}] ${[m, ...args].map(a => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")}`.trimEnd()
+      )
   return {
     name,
     logLevel: 2,
@@ -776,7 +859,13 @@ function fakeEditor(document: TextDocument) {
     visibleRanges: [],
     options: {},
     viewColumn: 1,
-    async edit(cb: (b: { replace(r: Range, t: string): void; insert(p: Position, t: string): void; delete(r: Range): void }) => void) {
+    async edit(
+      cb: (b: {
+        replace(r: Range, t: string): void
+        insert(p: Position, t: string): void
+        delete(r: Range): void
+      }) => void
+    ) {
       const we = new WorkspaceEdit()
       cb({
         replace: (r, t) => we.replace(document.uri, r, t),
@@ -807,17 +896,24 @@ export const window = {
   showWarningMessage: message("warn"),
   showErrorMessage: message("error"),
   async showQuickPick(_items: unknown, options?: { placeHolder?: string; title?: string }) {
-    log.warn(`Interactive selection not possible headless (${options?.title ?? options?.placeHolder ?? "quick pick"}) — cancelled`)
+    log.warn(
+      `Interactive selection not possible headless (${options?.title ?? options?.placeHolder ?? "quick pick"}) — cancelled`
+    )
     return undefined
   },
   async showInputBox(options?: { prompt?: string; title?: string }) {
-    log.warn(`Interactive input not possible headless (${options?.title ?? options?.prompt ?? "input box"}) — cancelled`)
+    log.warn(
+      `Interactive input not possible headless (${options?.title ?? options?.prompt ?? "input box"}) — cancelled`
+    )
     return undefined
   },
   showOpenDialog: async () => undefined,
   showSaveDialog: async () => undefined,
   showWorkspaceFolderPick: async () => undefined,
-  async withProgress<R>(_options: unknown, task: (progress: { report(v: unknown): void }, token: any) => Promise<R>) {
+  async withProgress<R>(
+    _options: unknown,
+    task: (progress: { report(v: unknown): void }, token: any) => Promise<R>
+  ) {
     return task({ report: () => undefined }, new CancellationTokenSource().token)
   },
   setStatusBarMessage: () => new Disposable(),
@@ -839,7 +935,8 @@ export const window = {
     onDidChangeTabGroups: () => new Disposable()
   },
   async showTextDocument(docOrUri: TextDocument | URI) {
-    const doc = docOrUri instanceof TextDocument ? docOrUri : await openTextDocument(docOrUri as URI)
+    const doc =
+      docOrUri instanceof TextDocument ? docOrUri : await openTextDocument(docOrUri as URI)
     return fakeEditor(doc)
   },
   registerTreeDataProvider: () => new Disposable(),
@@ -890,7 +987,9 @@ export class DiagnosticCollection {
     runtime.diagnosticCollections.add(this)
   }
   set(uriOrEntries: URI | [URI, Diagnostic[] | undefined][], diags?: Diagnostic[]) {
-    const entries: [URI, Diagnostic[] | undefined][] = Array.isArray(uriOrEntries) ? uriOrEntries : [[uriOrEntries, diags]]
+    const entries: [URI, Diagnostic[] | undefined][] = Array.isArray(uriOrEntries)
+      ? uriOrEntries
+      : [[uriOrEntries, diags]]
     for (const [uri, d] of entries) {
       if (!d) this.map.delete(uri.toString())
       else this.map.set(uri.toString(), { uri, diags: [...d] })
@@ -993,9 +1092,16 @@ export const lm = {
 
 export const extensions = {
   getExtension(id: string) {
-    if (runtime.ownExtension && id.toLowerCase() === runtime.ownExtension.id.toLowerCase()) return runtime.ownExtension
+    if (runtime.ownExtension && id.toLowerCase() === runtime.ownExtension.id.toLowerCase())
+      return runtime.ownExtension
     if (!runtime.extensionIds.has(id.toLowerCase())) return undefined
-    return { id, isActive: true, exports: undefined, packageJSON: {}, activate: async () => undefined }
+    return {
+      id,
+      isActive: true,
+      exports: undefined,
+      packageJSON: {},
+      activate: async () => undefined
+    }
   },
   get all() {
     return []
@@ -1030,7 +1136,14 @@ export const env = {
   onDidChangeTelemetryEnabled: () => new Disposable(),
   onDidChangeLogLevel: () => new Disposable(),
   onDidChangeShell: () => new Disposable(),
-  createTelemetryLogger: () => ({ logUsage() {}, logError() {}, dispose() {}, isUsageEnabled: false, isErrorsEnabled: false, onDidChangeEnableStates: () => new Disposable() })
+  createTelemetryLogger: () => ({
+    logUsage() {},
+    logError() {},
+    dispose() {},
+    isUsageEnabled: false,
+    isErrorsEnabled: false,
+    onDidChangeEnableStates: () => new Disposable()
+  })
 }
 
 export const debug = {

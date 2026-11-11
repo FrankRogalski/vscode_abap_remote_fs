@@ -10,18 +10,28 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { parseArgs } from "node:util"
-import { type HeadlessConfig, configJsonSchema, configTemplate, defaultConfigLocations, loadConfig, parseConfig } from "./config"
+import {
+  type HeadlessConfig,
+  configJsonSchema,
+  configTemplate,
+  defaultConfigLocations,
+  loadConfig,
+  parseConfig
+} from "./config"
 import { log } from "./log"
 
 // stdout belongs to the MCP stdio transport: route all console output to stderr
 for (const m of ["log", "info", "debug", "trace"] as const)
-  console[m] = (...args: unknown[]) => log.debug(args.map(a => (typeof a === "string" ? a : String(a))).join(" "))
+  console[m] = (...args: unknown[]) =>
+    log.debug(args.map(a => (typeof a === "string" ? a : String(a))).join(" "))
 console.warn = (...args: unknown[]) => log.warn(args.map(String).join(" "))
 console.error = (...args: unknown[]) => log.error(args.map(String).join(" "))
 
 process.removeAllListeners("warning")
 process.on("warning", w => log.debug(`node warning: ${w.name}: ${w.message}`))
-process.on("unhandledRejection", e => log.warn(`unhandled rejection: ${e instanceof Error ? e.stack : e}`))
+process.on("unhandledRejection", e =>
+  log.warn(`unhandled rejection: ${e instanceof Error ? e.stack : e}`)
+)
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -70,7 +80,9 @@ function withOverrides(cfg: HeadlessConfig) {
 async function serve() {
   const cfg = withOverrides(loadConfig(values.config))
   const rt = await boot(cfg)
-  log.info(`${rt.toolNames().length} tools registered, systems: ${Object.keys(cfg.systems).join(", ")}`)
+  log.info(
+    `${rt.toolNames().length} tools registered, systems: ${Object.keys(cfg.systems).join(", ")}`
+  )
   const { serveHttp, serveStdio } = await import("./mcp")
   const stop = cfg.mcp.transport === "http" ? await serveHttp(cfg.mcp) : await serveStdio()
   let stopping = false
@@ -88,7 +100,8 @@ async function serve() {
 
 async function init() {
   const target = resolve(positionals[1] ?? defaultConfigLocations()[1]!)
-  if (existsSync(target) && !values.force) throw new Error(`${target} exists (use --force to overwrite)`)
+  if (existsSync(target) && !values.force)
+    throw new Error(`${target} exists (use --force to overwrite)`)
   let content: object = configTemplate()
   let note = ""
   if (values["from-vscode"]) {
@@ -109,7 +122,10 @@ async function init() {
 
 async function tools() {
   // no SAP logon needed: tools register lazily
-  const cfg = parseConfig({ systems: { dummy: { url: "http://localhost", username: "x" } }, logLevel: "error" })
+  const cfg = parseConfig({
+    systems: { dummy: { url: "http://localhost", username: "x" } },
+    logLevel: "error"
+  })
   cfg.stateDir = resolve(process.env.TMPDIR ?? "/tmp", "abapfs-mcp-tools")
   const rt = await boot(cfg)
   const { runtime } = await import("./vscode/impl")
@@ -117,14 +133,22 @@ async function tools() {
   const exposeEdit = true
   const names = rt.toolNames()
   const list = lm.tools
-    .filter((t: any) => t.tags.includes("abap-fs") && (exposeEdit || t.name !== "replace_string_in_abap_object"))
+    .filter(
+      (t: any) =>
+        t.tags.includes("abap-fs") && (exposeEdit || t.name !== "replace_string_in_abap_object")
+    )
     .map((t: any) => ({ name: t.name, description: t.description }))
-  list.push({ name: "get_abap_diagnostics", description: "Syntax check results (registered by the MCP server itself)" })
+  list.push({
+    name: "get_abap_diagnostics",
+    description: "Syntax check results (registered by the MCP server itself)"
+  })
   if (values.json) process.stdout.write(JSON.stringify(list, null, 2) + "\n")
   else {
     for (const t of list) process.stdout.write(`${t.name}\n`)
     const hidden = names.filter(n => !list.some((t: any) => t.name === n))
-    process.stdout.write(`\n${list.length} exposed via MCP (${names.length} registered${hidden.length ? `, not exposed: ${hidden.join(", ")}` : ""})\n`)
+    process.stdout.write(
+      `\n${list.length} exposed via MCP (${names.length} registered${hidden.length ? `, not exposed: ${hidden.join(", ")}` : ""})\n`
+    )
   }
   void runtime
   await rt.dispose()

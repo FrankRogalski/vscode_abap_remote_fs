@@ -68,11 +68,14 @@ export async function triggerSyntaxCheck(uri: string) {
   }
 
   const open = workspace.textDocuments.find((d: any) => d.uri.toString() === docUri.toString())
-  const source: string = open ? open.getText() : await client.getObjectSource(mainUrl, { version: "inactive" })
+  const source: string = open
+    ? open.getText()
+    : await client.getObjectSource(mainUrl, { version: "inactive" })
   const checks = await client.syntaxCheck(url, mainUrl, source, mainProgram)
 
   const byTarget = new Map<string, { uri: any; diags: any[] }>()
-  for (const key of previousTargets.get(uri) ?? []) byTarget.set(key, { uri: Uri.parse(key), diags: [] })
+  for (const key of previousTargets.get(uri) ?? [])
+    byTarget.set(key, { uri: Uri.parse(key), diags: [] })
   byTarget.set(uri, { uri: docUri, diags: [] })
   const sources = new Map<string, string>()
 
@@ -83,7 +86,8 @@ export async function triggerSyntaxCheck(uri: string) {
       try {
         target = Uri.parse(await vsCodeUri(connId, c.uri, true))
         const base = c.uri.replace(/[?#].*/, "")
-        if (!sources.has(base)) sources.set(base, await client.getObjectSource(base, { version: "inactive" }))
+        if (!sources.has(base))
+          sources.set(base, await client.getObjectSource(base, { version: "inactive" }))
         text = sources.get(base)!
       } catch {
         continue

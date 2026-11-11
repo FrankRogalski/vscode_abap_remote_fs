@@ -85,7 +85,16 @@ export function createExtensionContext(opts: {
     logPath: logDir,
     logUri: URI.file(logDir),
     extensionMode: 1,
-    extension: { id, extensionUri, extensionPath, isActive: true, packageJSON, extensionKind: 1, exports: undefined, activate: async () => undefined },
+    extension: {
+      id,
+      extensionUri,
+      extensionPath,
+      isActive: true,
+      packageJSON,
+      extensionKind: 1,
+      exports: undefined,
+      activate: async () => undefined
+    },
     environmentVariableCollection: {
       persistent: false,
       replace() {},
@@ -99,6 +108,9 @@ export function createExtensionContext(opts: {
         return this
       }
     },
-    languageModelAccessInformation: { onDidChange: () => ({ dispose() {} }), canSendRequest: () => undefined }
+    languageModelAccessInformation: {
+      onDidChange: () => ({ dispose() {} }),
+      canSendRequest: () => undefined
+    }
   }
 }

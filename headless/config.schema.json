@@ -63,13 +63,7 @@
           "authMethod": {
             "description": "basic (default) or cert work headless; the others need a browser or Windows SSPI",
             "type": "string",
-            "enum": [
-              "basic",
-              "cert",
-              "kerberos",
-              "browser_sso",
-              "oauth_onprem"
-            ]
+            "enum": ["basic", "cert", "kerberos", "browser_sso", "oauth_onprem"]
           },
           "certAuth": {
             "description": "X.509 client certificate (authMethod cert)",
@@ -85,9 +79,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "certPath"
-            ],
+            "required": ["certPath"],
             "additionalProperties": {}
           },
           "certPassphrase": {
@@ -111,10 +103,7 @@
             "additionalProperties": {}
           }
         },
-        "required": [
-          "url",
-          "username"
-        ],
+        "required": ["url", "username"],
         "additionalProperties": {}
       }
     },
@@ -131,10 +120,7 @@
           "description": "stdio: the MCP client spawns the server. http: long-running server on host:port/mcp",
           "default": "stdio",
           "type": "string",
-          "enum": [
-            "stdio",
-            "http"
-          ]
+          "enum": ["stdio", "http"]
         },
         "host": {
           "description": "HTTP bind address",
@@ -195,16 +181,9 @@
     "logLevel": {
       "default": "warn",
       "type": "string",
-      "enum": [
-        "error",
-        "warn",
-        "info",
-        "debug"
-      ]
+      "enum": ["error", "warn", "info", "debug"]
     }
   },
-  "required": [
-    "systems"
-  ],
+  "required": ["systems"],
   "additionalProperties": false
 }

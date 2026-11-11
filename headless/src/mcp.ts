@@ -61,7 +61,8 @@ export async function serveHttp(cfg: McpConfig): Promise<() => Promise<void>> {
       return
     }
     if (url.pathname !== "/mcp") return jsonError(res, 404, -32601, "Not found: use /mcp")
-    if (!validateApiKey(req)) return jsonError(res, 401, -32001, "Unauthorized: invalid or missing API key")
+    if (!validateApiKey(req))
+      return jsonError(res, 401, -32001, "Unauthorized: invalid or missing API key")
 
     const sessionId = req.headers["mcp-session-id"] as string | undefined
     try {

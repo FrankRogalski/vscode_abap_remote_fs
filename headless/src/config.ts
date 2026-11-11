@@ -25,7 +25,9 @@ export const systemSchema = z
     passwordCommand: z
       .string()
       .optional()
-      .describe("Shell command printing the password, e.g. `security find-generic-password -s sap-dev -w`"),
+      .describe(
+        "Shell command printing the password, e.g. `security find-generic-password -s sap-dev -w`"
+      ),
     client: z.string().default("").describe("SAP client (Mandant), e.g. 100"),
     language: z.string().default("EN").describe("Logon language"),
     allowSelfSigned: z.boolean().optional().describe("Accept self-signed TLS certificates"),
@@ -56,10 +58,15 @@ export const mcpSchema = z.strictObject({
   transport: z
     .enum(["stdio", "http"])
     .default("stdio")
-    .describe("stdio: the MCP client spawns the server. http: long-running server on host:port/mcp"),
+    .describe(
+      "stdio: the MCP client spawns the server. http: long-running server on host:port/mcp"
+    ),
   host: z.string().default("127.0.0.1").describe("HTTP bind address"),
   port: z.number().int().positive().default(4847).describe("HTTP port"),
-  apiKey: z.string().optional().describe("When set, HTTP clients must send Authorization: Bearer <key>"),
+  apiKey: z
+    .string()
+    .optional()
+    .describe("When set, HTTP clients must send Authorization: Bearer <key>"),
   exposeEditTool: z.boolean().default(true).describe("Expose replace_string_in_abap_object")
 })
 
@@ -70,14 +77,18 @@ export const configSchema = z.strictObject({
     .superRefine((systems, ctx) => {
       for (const id of Object.keys(systems))
         if (!/^[\w-]{3,}$/.test(id))
-          ctx.addIssue({ code: "custom", path: [id], message: `System id '${id}': use 3+ characters: letters, digits, - and _` })
+          ctx.addIssue({
+            code: "custom",
+            path: [id],
+            message: `System id '${id}': use 3+ characters: letters, digits, - and _`
+          })
     })
     .describe("ABAP systems by connection id, as used in the tools' connectionId parameter"),
   mcp: mcpSchema.default(mcpSchema.parse({})),
   settings: z
     .record(z.string(), z.unknown())
     .default({})
-    .describe("Any other ABAP FS setting by its VS Code id, e.g. \"abapfs.atc.autoRefresh\": true"),
+    .describe('Any other ABAP FS setting by its VS Code id, e.g. "abapfs.atc.autoRefresh": true'),
   secrets: z.record(z.string(), z.string()).default({}).describe("Raw secret storage entries"),
   extensions: z
     .array(z.string())
@@ -118,7 +129,8 @@ export function interpolateEnv<T>(
     })
     return (missing ? undefined : out) as T
   }
-  if (Array.isArray(value)) return value.map((v, i) => interpolateEnv(v, env, onMissing, [...path, String(i)])) as T
+  if (Array.isArray(value))
+    return value.map((v, i) => interpolateEnv(v, env, onMissing, [...path, String(i)])) as T
   if (value && typeof value === "object")
     return Object.fromEntries(
       Object.entries(value)
@@ -129,7 +141,10 @@ export function interpolateEnv<T>(
 }
 
 const configHome = () => process.env.XDG_CONFIG_HOME || join(homedir(), ".config")
-export const defaultConfigLocations = () => [resolve("abapfs.json"), join(configHome(), "abapfs", "config.json")]
+export const defaultConfigLocations = () => [
+  resolve("abapfs.json"),
+  join(configHome(), "abapfs", "config.json")
+]
 
 export function findConfigFile(explicit?: string): string {
   const candidate = explicit || process.env.ABAPFS_CONFIG
@@ -150,7 +165,8 @@ const expandHome = (p: string) => (p.startsWith("~/") ? join(homedir(), p.slice(
 
 export function parseConfig(raw: unknown, configPath = "<inline>"): HeadlessConfig {
   const result = configSchema.safeParse(raw)
-  if (!result.success) throw new Error(`Invalid config ${configPath}:\n${z.prettifyError(result.error)}`)
+  if (!result.success)
+    throw new Error(`Invalid config ${configPath}:\n${z.prettifyError(result.error)}`)
   const cfg = result.data
   const base = configPath.startsWith("<") ? process.cwd() : dirname(configPath)
   const abs = (p?: string) => {
@@ -166,7 +182,9 @@ export function parseConfig(raw: unknown, configPath = "<inline>"): HeadlessConf
       sys.certAuth.caPath = abs(sys.certAuth.caPath)
     }
   }
-  const stateDir = abs(cfg.stateDir) ?? join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "abapfs-mcp")
+  const stateDir =
+    abs(cfg.stateDir) ??
+    join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "abapfs-mcp")
   return { ...cfg, configPath, stateDir }
 }
 
@@ -188,7 +206,8 @@ export function loadConfig(explicit?: string): HeadlessConfig {
     return throwMissing(name, p)
   }
   const cfg = parseConfig(interpolateEnv(raw, process.env, onMissing), path)
-  for (const [id, name] of missingPasswords) (cfg.systems[id] as Record<string, unknown>).passwordEnv = name
+  for (const [id, name] of missingPasswords)
+    (cfg.systems[id] as Record<string, unknown>).passwordEnv = name
   return cfg
 }
 
@@ -196,16 +215,21 @@ export function loadConfig(explicit?: string): HeadlessConfig {
 export function resolvePassword(sys: SystemConfig): string {
   if (sys.password) return sys.password
   if (sys.passwordCommand)
-    return execSync(sys.passwordCommand, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).replace(/\r?\n$/, "")
+    return execSync(sys.passwordCommand, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"]
+    }).replace(/\r?\n$/, "")
   if (typeof sys.passwordEnv === "string")
     throw new Error(`No password: environment variable ${sys.passwordEnv} is not set`)
   return ""
 }
 
-export const configJsonSchema = () => z.toJSONSchema(configSchema, { io: "input", unrepresentable: "any" })
+export const configJsonSchema = () =>
+  z.toJSONSchema(configSchema, { io: "input", unrepresentable: "any" })
 
 export const configTemplate = () => ({
-  $schema: "https://raw.githubusercontent.com/FrankRogalski/vscode_abap_remote_fs/master/headless/config.schema.json",
+  $schema:
+    "https://raw.githubusercontent.com/FrankRogalski/vscode_abap_remote_fs/master/headless/config.schema.json",
   systems: {
     dev100: {
       url: "https://my-sap-host:44300",

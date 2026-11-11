@@ -20,7 +20,10 @@ const manifest = packageJSON as any
 /** Mirrors the extension's install folder: assets live in <root>/client/dist/media like in a VSIX */
 export function extensionPath() {
   const bundleDir = dirname(fileURLToPath(import.meta.url))
-  for (const candidate of [join(bundleDir, "extension"), join(bundleDir, "..", "dist", "extension")])
+  for (const candidate of [
+    join(bundleDir, "extension"),
+    join(bundleDir, "..", "dist", "extension")
+  ])
     if (existsSync(join(candidate, "client"))) return candidate
   return join(bundleDir, "extension")
 }
@@ -41,11 +44,13 @@ function flattenSettings(input: Record<string, unknown>, known: Map<string, unkn
   const walk = (prefix: string, value: unknown) => {
     const isObj = value && typeof value === "object" && !Array.isArray(value)
     if (!isObj || known.has(prefix)) {
-      if (!known.has(prefix)) log.warn(`settings: '${prefix}' is not an ABAP FS setting (kept anyway)`)
+      if (!known.has(prefix))
+        log.warn(`settings: '${prefix}' is not an ABAP FS setting (kept anyway)`)
       out.set(prefix, value)
       return
     }
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) walk(prefix ? `${prefix}.${k}` : k, v)
+    for (const [k, v] of Object.entries(value as Record<string, unknown>))
+      walk(prefix ? `${prefix}.${k}` : k, v)
   }
   for (const [k, v] of Object.entries(input)) walk(k, v)
   return out
@@ -104,7 +109,8 @@ export function referencedSystems(input: unknown): Set<string> {
   const visit = (v: unknown, key = "", depth = 0) => {
     if (depth > 4 || v == null) return
     if (typeof v === "string") {
-      if (/^(connectionId|connId|sourceConnectionId|targetConnectionId|system)$/i.test(key) && v) ids.add(v.toLowerCase())
+      if (/^(connectionId|connId|sourceConnectionId|targetConnectionId|system)$/i.test(key) && v)
+        ids.add(v.toLowerCase())
       for (const m of v.matchAll(/\badt:\/\/([\w-]+)/gi)) ids.add(m[1]!.toLowerCase())
       return
     }
@@ -155,7 +161,11 @@ export async function activateHeadless(cfg: HeadlessConfig): Promise<HeadlessRun
   const { ADTSCHEME } = await import("upstream:adt/conections")
   const { FsProvider } = await import("upstream:fs/FsProvider")
   const { workspace } = await import("vscode")
-  context.subscriptions.push(workspace.registerFileSystemProvider(ADTSCHEME, FsProvider.get(context as any), { isCaseSensitive: true }))
+  context.subscriptions.push(
+    workspace.registerFileSystemProvider(ADTSCHEME, FsProvider.get(context as any), {
+      isCaseSensitive: true
+    })
+  )
 
   // commands: several tools delegate to them (object creation, test includes, ...)
   await import("upstream:commands")
@@ -184,7 +194,9 @@ export async function activateHeadless(cfg: HeadlessConfig): Promise<HeadlessRun
     toolNames: () => [...runtime.tools.keys()],
     async dispose() {
       const { disconnect } = await import("upstream:adt/conections")
-      await Promise.race([disconnect([], true), new Promise(r => setTimeout(r, 5000))]).catch(() => undefined)
+      await Promise.race([disconnect([], true), new Promise(r => setTimeout(r, 5000))]).catch(
+        () => undefined
+      )
       for (const s of context.subscriptions.splice(0))
         try {
           s.dispose()

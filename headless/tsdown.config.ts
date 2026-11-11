@@ -48,7 +48,9 @@ const upstreamPlugin = {
     const hook = exposeInternals[resolve(id.replace(/\?.*$/, ""))]
     if (!hook) return null
     if (!hook.needle.test(code))
-      throw new Error(`abapfs-headless: ${id} no longer matches ${hook.needle} — update tsdown.config.ts`)
+      throw new Error(
+        `abapfs-headless: ${id} no longer matches ${hook.needle} — update tsdown.config.ts`
+      )
     return { code: code + hook.append, map: null }
   }
 }
