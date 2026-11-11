@@ -11,6 +11,22 @@ describe("config", () => {
     expect(() => interpolateEnv("${env:NOPE}", {})).toThrow(/NOPE is not set/)
   })
 
+  it("an unset password variable disables only that system", async () => {
+    const { loadConfig, resolvePassword } = await import("../config")
+    const { mkdtempSync, writeFileSync } = await import("node:fs")
+    const { join } = await import("node:path")
+    const { tmpdir } = await import("node:os")
+    const file = join(mkdtempSync(join(tmpdir(), "abapfs-")), "c.json")
+    writeFileSync(file, JSON.stringify({ systems: {
+      ok1: { url: "u", username: "a", password: "plain" },
+      bad: { url: "u", username: "b", password: "${env:ABAPFS_TEST_UNSET_PW}" } } }))
+    const cfg = loadConfig(file)
+    expect(resolvePassword(cfg.systems.ok1!)).toBe("plain")
+    expect(() => resolvePassword(cfg.systems.bad!)).toThrow(/ABAPFS_TEST_UNSET_PW is not set/)
+    writeFileSync(file, JSON.stringify({ systems: { ok1: { url: "${env:ABAPFS_TEST_UNSET_URL}", username: "a" } } }))
+    expect(() => loadConfig(file)).toThrow(/ABAPFS_TEST_UNSET_URL is not set/)
+  })
+
   it("applies defaults and rejects unknown top level keys", () => {
     const cfg = parseConfig(base)
     expect(cfg.mcp).toMatchObject({ transport: "stdio", port: 4847, exposeEditTool: true })

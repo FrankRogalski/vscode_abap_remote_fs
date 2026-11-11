@@ -51,7 +51,7 @@ function flattenSettings(input: Record<string, unknown>, known: Map<string, unkn
   return out
 }
 
-const SECRET_ONLY_FIELDS = ["password", "passwordCommand", "certPassphrase"] as const
+const SECRET_ONLY_FIELDS = ["password", "passwordCommand", "certPassphrase", "passwordEnv"] as const
 
 function storedRemote(sys: SystemConfig) {
   const copy: Record<string, unknown> = { ...sys }

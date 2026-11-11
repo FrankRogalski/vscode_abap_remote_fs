@@ -93,17 +93,38 @@ export type HeadlessConfig = z.infer<typeof configSchema> & { configPath: string
 
 const ENV_REF = /\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}/g
 
+/** What to do with an unset variable at a path: return a replacement, or throw */
+export type MissingEnv = (name: string, path: string[]) => string | undefined
+
+const throwMissing: MissingEnv = name => {
+  throw new Error(`Environment variable ${name} is not set`)
+}
+
 /** Replace ${env:NAME} references in every string of a parsed JSON value */
-export function interpolateEnv<T>(value: T, env: NodeJS.ProcessEnv = process.env): T {
-  if (typeof value === "string")
-    return value.replace(ENV_REF, (_, name: string) => {
+export function interpolateEnv<T>(
+  value: T,
+  env: NodeJS.ProcessEnv = process.env,
+  onMissing: MissingEnv = throwMissing,
+  path: string[] = []
+): T {
+  if (typeof value === "string") {
+    let missing = false
+    const out = value.replace(ENV_REF, (_, name: string) => {
       const v = env[name]
-      if (v === undefined) throw new Error(`Environment variable ${name} is not set`)
-      return v
-    }) as T
-  if (Array.isArray(value)) return value.map(v => interpolateEnv(v, env)) as T
+      if (v !== undefined) return v
+      const r = onMissing(name, path)
+      if (r === undefined) missing = true
+      return r ?? ""
+    })
+    return (missing ? undefined : out) as T
+  }
+  if (Array.isArray(value)) return value.map((v, i) => interpolateEnv(v, env, onMissing, [...path, String(i)])) as T
   if (value && typeof value === "object")
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, interpolateEnv(v, env)])) as T
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([k, v]) => [k, interpolateEnv(v, env, onMissing, [...path, k])])
+        .filter(([, v]) => v !== undefined)
+    ) as T
   return value
 }
 
@@ -157,7 +178,18 @@ export function loadConfig(explicit?: string): HeadlessConfig {
   } catch (e) {
     throw new Error(`Cannot parse ${path}: ${(e as Error).message}`)
   }
-  return parseConfig(interpolateEnv(raw), path)
+  // an unset password variable only disables that system, with a clear message on first use
+  const missingPasswords = new Map<string, string>()
+  const onMissing: MissingEnv = (name, p) => {
+    if (p.length === 3 && p[0] === "systems" && /^(password|certPassphrase)$/.test(p[2]!)) {
+      missingPasswords.set(p[1]!, name)
+      return undefined
+    }
+    return throwMissing(name, p)
+  }
+  const cfg = parseConfig(interpolateEnv(raw, process.env, onMissing), path)
+  for (const [id, name] of missingPasswords) (cfg.systems[id] as Record<string, unknown>).passwordEnv = name
+  return cfg
 }
 
 /** Password of a system: literal value first, then passwordCommand */
@@ -165,6 +197,8 @@ export function resolvePassword(sys: SystemConfig): string {
   if (sys.password) return sys.password
   if (sys.passwordCommand)
     return execSync(sys.passwordCommand, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).replace(/\r?\n$/, "")
+  if (typeof sys.passwordEnv === "string")
+    throw new Error(`No password: environment variable ${sys.passwordEnv} is not set`)
   return ""
 }
 
