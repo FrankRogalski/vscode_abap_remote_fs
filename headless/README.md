@@ -168,8 +168,13 @@ runs every night at 00:00 Europe/Berlin (and on demand). It runs
    upstream tags for MCP is served**, and calls the tools that need no SAP system.
 
 The merge is pushed only if all of that passes. Otherwise `master` stays as it was, the failed state
-is pushed to `upstream-sync/failed-<date>`, and an issue is opened. The job also keeps upstream's own
-release and publish workflows disabled in the fork.
+is pushed to `upstream-sync/failed-<date>`, and an issue is opened.
+
+Upstream's own workflows (CI, docs, changesets, release, publish) also live in the fork and run on
+every push to `master`. Without upstream's secrets they fail, and the docs workflow commits a
+regenerated `DOCUMENTATION.md`. Disable them in the fork's Actions tab, or set the repository
+variable `DISABLE_UPSTREAM_WORKFLOWS` to `true` so the nightly job disables them, including new ones
+upstream adds later.
 
 GitHub's built-in token cannot push commits that change `.github/workflows/*`, which upstream does
 now and then. To cover those nights, add a fine-grained personal access token for this repository

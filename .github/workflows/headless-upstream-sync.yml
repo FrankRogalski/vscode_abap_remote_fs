@@ -80,8 +80,10 @@ jobs:
         if: steps.gate.outputs.run == 'true' && steps.sync.outputs.changed == 'true' && success()
         run: git push origin HEAD:${{ github.ref_name }}
 
-      - name: Keep upstream's release workflows off in this fork
-        if: steps.gate.outputs.run == 'true' && always()
+      # Opt-in (repository variable DISABLE_UPSTREAM_WORKFLOWS=true): upstream's CI/docs/release
+      # workflows also run in the fork on every push to master and fail without its secrets.
+      - name: Keep upstream's workflows off in this fork
+        if: steps.gate.outputs.run == 'true' && always() && vars.DISABLE_UPSTREAM_WORKFLOWS == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
