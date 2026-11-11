@@ -67,13 +67,16 @@ if [ -n "$(git diff --name-only --diff-filter=U)" ] || ! git diff --quiet || ! g
   fi
 fi
 
+# each step must succeed; `&&` because `set -e` does not apply inside a function used in `if`
 verify() {
-  say "Typecheck"; pnpm --filter abapfs-headless typecheck
-  say "Unit tests"; pnpm --filter abapfs-headless test
-  say "Build"; pnpm --filter abapfs-headless build
-  say "MCP smoke test"; (cd headless && node scripts/smoke.mjs --min-tools "${MIN_TOOLS:-40}" | tee /tmp/abapfs-smoke.json)
+  say "Typecheck" && pnpm --filter abapfs-headless typecheck &&
+    say "Unit tests" && pnpm --filter abapfs-headless test &&
+    say "Build" && pnpm --filter abapfs-headless build &&
+    say "MCP smoke test" &&
+    (cd headless && node scripts/smoke.mjs --min-tools "${MIN_TOOLS:-40}" >/tmp/abapfs-smoke.json; rc=$?; cat /tmp/abapfs-smoke.json; exit $rc)
 }
 if ! verify; then
+  say "Verification FAILED"
   echo "changed=true" >>"$OUT"
   exit 3
 fi

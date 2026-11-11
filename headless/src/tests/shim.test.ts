@@ -1,4 +1,4 @@
-import { Position, Range, Uri, commands, lm, workspace, window } from "vscode"
+import { Position, Range, Uri, commands, lm, workspace, window } from "../vscode/index"
 import { TextDocument, runtime } from "../vscode/impl"
 
 describe("vscode shim", () => {
@@ -40,7 +40,7 @@ describe("vscode shim", () => {
 
     const seen: unknown[] = []
     runtime.beforeToolInvoke = async (_n, input) => void seen.push(input)
-    const tool = { invoke: async (o: any) => o.input.v * 2 }
+    const tool: any = { invoke: async (o: any, _t?: unknown) => o.input.v * 2 }
     lm.registerTool("t_tool", tool)
     expect(await tool.invoke({ input: { v: 21 } }, undefined)).toBe(42)
     expect(seen).toEqual([{ v: 21 }])

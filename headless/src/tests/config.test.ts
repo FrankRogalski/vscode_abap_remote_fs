@@ -1,7 +1,7 @@
 import { interpolateEnv, parseConfig } from "../config"
 import { applyConfig, referencedSystems } from "../activate"
 import { runtime } from "../vscode/impl"
-import { workspace } from "vscode"
+import { workspace } from "../vscode/index"
 
 const base = { systems: { dev100: { url: "https://h:443", username: "DEV", password: "secret", client: "100" } } }
 
@@ -30,7 +30,7 @@ describe("applyConfig", () => {
     const resolvers = applyConfig(
       parseConfig({ ...base, settings: { "abapfs.atc": { autoRefresh: false }, abapfs: { custom: { x: 1 } } } })
     )
-    const remote = workspace.getConfiguration("abapfs").get<any>("remote")
+    const remote = workspace.getConfiguration("abapfs").get("remote")
     expect(remote.dev100).toMatchObject({ url: "https://h:443", username: "DEV" })
     expect(remote.dev100.password).toBeUndefined()
     expect(resolvers.get("vscode.abapfs.dev100:DEV")?.()).toBe("secret")
@@ -41,7 +41,7 @@ describe("applyConfig", () => {
 
   it("assembles nested sections from flat ids", () => {
     applyConfig(parseConfig({ ...base, mcp: { port: 9999 } }))
-    const mcp = workspace.getConfiguration("abapfs").get<any>("mcpServer")
+    const mcp = workspace.getConfiguration("abapfs").get("mcpServer")
     expect(mcp.port).toBe(9999)
     expect(workspace.getConfiguration("abapfs.mcpServer").port).toBe(9999)
   })
