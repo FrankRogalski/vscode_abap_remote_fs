@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "upstream:*": ["../client/src/*"]
+    }
+  },
+  "include": ["src", "tsdown.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

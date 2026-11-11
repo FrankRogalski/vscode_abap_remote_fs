@@ -1,0 +1,112 @@
+# Nightly: merge upstream into this fork, verify the headless MCP server, push only if green.
+#
+# Runs at 00:00 Europe/Berlin. GitHub cron is UTC only, so it is scheduled at 22:00 and 23:00 UTC
+# and the first step lets through only the run that lands at local midnight (CET or CEST).
+name: Headless upstream sync
+
+on:
+  schedule:
+    - cron: "0 22 * * *"
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+    inputs:
+      force_verify:
+        description: Run the verification even when upstream has no new commits
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: headless-upstream-sync
+  cancel-in-progress: false
+
+env:
+  SYNC_TZ: Europe/Berlin
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Midnight gate
+        id: gate
+        run: |
+          hour=$(TZ="$SYNC_TZ" date +%H)
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$hour" != "00" ]; then
+            echo "Not midnight in $SYNC_TZ (hour $hour), skipping"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # GITHUB_TOKEN cannot push commits that touch .github/workflows (upstream sometimes
+          # does); a fine-grained PAT with Contents + Workflows write in SYNC_TOKEN can.
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Install pnpm
+        if: steps.gate.outputs.run == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node.js
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Merge upstream and verify
+        if: steps.gate.outputs.run == 'true'
+        id: sync
+        env:
+          FORCE_VERIFY: ${{ inputs.force_verify && '1' || '' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          set +e
+          headless/scripts/sync-upstream.sh 2>&1 | tee sync.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit $code
+
+      - name: Push
+        if: steps.gate.outputs.run == 'true' && steps.sync.outputs.changed == 'true' && success()
+        run: git push origin HEAD:${{ github.ref_name }}
+
+      - name: Keep upstream's release workflows off in this fork
+        if: steps.gate.outputs.run == 'true' && always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow list --all --json name,path,state --jq '.[] | select(.state == "active") | select(.path != ".github/workflows/headless-upstream-sync.yml") | .path' |
+          while read -r wf; do
+            echo "disabling $wf"
+            gh workflow disable "$(basename "$wf")" || true
+          done
+
+      - name: Report failure
+        if: failure() && steps.gate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="upstream-sync/failed-$(date -u +%Y-%m-%d)"
+          if [ "${{ steps.sync.outputs.code }}" = "3" ]; then
+            git push -f origin "HEAD:refs/heads/$branch" || true
+            where="The failed merge is on branch \`$branch\`."
+          else
+            where="The merge was aborted; ${{ github.ref_name }} is unchanged."
+          fi
+          title="Nightly upstream sync failed"
+          body=$(printf '%s\n\nUpstream: %s\nRun: %s/%s/actions/runs/%s\nExit code: %s (2 = merge conflict, 3 = verification failed)\n\n<details><summary>Log tail</summary>\n\n```\n%s\n```\n</details>\n' \
+            "$where" "${{ steps.sync.outputs.upstream_sha }}" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}" \
+            "${{ steps.sync.outputs.code }}" "$(tail -n 80 sync.log 2>/dev/null)")
+          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then gh issue comment "$existing" --body "$body"
+          else gh issue create --title "$title" --body "$body" || echo "$body"; fi

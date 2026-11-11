@@ -1,0 +1,42 @@
+{
+  "name": "abapfs-headless",
+  "version": "0.1.0",
+  "description": "ABAP FS MCP server without VS Code: runs the extension's own tools headless, configured by one JSON file",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "abapfs-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "config.schema.json",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "prebuild": "node scripts/gen-vscode-shim.mjs",
+    "build": "tsdown",
+    "pretypecheck": "node scripts/gen-vscode-shim.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "node scripts/smoke.mjs",
+    "clean": "node ../scripts/rm.mjs dist src/vscode/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "abapfs": "workspace:*",
+    "jsonc-parser": "3.3.1",
+    "vscode-abap-remote-fs-client": "workspace:*",
+    "vscode-uri": "3.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/vscode": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

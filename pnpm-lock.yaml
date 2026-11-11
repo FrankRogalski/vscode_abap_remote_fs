@@ -351,6 +351,43 @@ importers:
         specifier: 'catalog:'
         version: 5.1.1(typescript@6.0.3)(vitest@5.0.0)
 
+  headless:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.30.0(supports-color@10.2.2)(zod@3.25.76)
+      abapfs:
+        specifier: workspace:*
+        version: link:../modules/abapfs
+      jsonc-parser:
+        specifier: 3.3.1
+        version: 3.3.1
+      vscode-abap-remote-fs-client:
+        specifier: workspace:*
+        version: link:../client
+      vscode-uri:
+        specifier: 3.1.0
+        version: 3.1.0
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.2
+      '@types/vscode':
+        specifier: 'catalog:'
+        version: 1.137.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.23.0(typescript@6.0.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@22.20.2)(@vitest/coverage-v8@5.0.0)(vite@8.3.0(@types/node@22.20.2)(yaml@2.9.1))
+
   modules/abapObject:
     dependencies:
       abap-adt-api:
@@ -3775,6 +3812,9 @@ packages:
   vscode-test-adapter-api@1.9.0:
     resolution: {integrity: sha512-lltjehUP0J9H3R/HBctjlqeUCwn2t9Lbhj2Y500ib+j5Y4H3hw+hVTzuSsfw16LtxY37knlU39QIlasa7svzOQ==}
     engines: {vscode: ^1.23.0}
+
+  vscode-uri@3.1.0:
+    resolution: {integrity: sha512-/BpdSx+yCQGnCvecbyXdxHDkuk55/G3xwnC0GqY4gmQ3j+A+g8kzzgB4Nk/SINjqn6+waqw3EgbVF2QKExkRxQ==}
 
   whatwg-encoding@3.1.1:
     resolution: {integrity: sha512-6qN4hJdMwfYBtE3YBTTHhoeuUrDBPZmbQaxWAqSALV/MeEnR5z1xd8UKud2RAkFoPkmB+hli1TZSnyi84xz1vQ==}
@@ -7273,6 +7313,8 @@ snapshots:
       vscode-languageserver-protocol: 3.17.5
 
   vscode-test-adapter-api@1.9.0: {}
+
+  vscode-uri@3.1.0: {}
 
   whatwg-encoding@3.1.1:
     dependencies:

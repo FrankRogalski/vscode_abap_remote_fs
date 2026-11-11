@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "systems": {
+      "description": "ABAP systems by connection id, as used in the tools' connectionId parameter",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "description": "Same fields as an `abapfs.remote` entry in VS Code, plus how to get the password",
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "Base URL of the ABAP server, e.g. https://host:44300",
+            "type": "string"
+          },
+          "username": {
+            "description": "SAP user",
+            "type": "string"
+          },
+          "password": {
+            "description": "Password. Prefer ${env:VAR} or passwordCommand over a literal value",
+            "type": "string"
+          },
+          "passwordCommand": {
+            "description": "Shell command printing the password, e.g. `security find-generic-password -s sap-dev -w`",
+            "type": "string"
+          },
+          "client": {
+            "description": "SAP client (Mandant), e.g. 100",
+            "default": "",
+            "type": "string"
+          },
+          "language": {
+            "description": "Logon language",
+            "default": "EN",
+            "type": "string"
+          },
+          "allowSelfSigned": {
+            "description": "Accept self-signed TLS certificates",
+            "type": "boolean"
+          },
+          "customCA": {
+            "description": "Path to a PEM CA bundle",
+            "type": "string"
+          },
+          "atcVariant": {
+            "description": "ATC check variant",
+            "type": "string"
+          },
+          "atcapprover": {
+            "description": "ATC exemption approver",
+            "type": "string"
+          },
+          "diff_formatter": {
+            "type": "string"
+          },
+          "authMethod": {
+            "description": "basic (default) or cert work headless; the others need a browser or Windows SSPI",
+            "type": "string",
+            "enum": [
+              "basic",
+              "cert",
+              "kerberos",
+              "browser_sso",
+              "oauth_onprem"
+            ]
+          },
+          "certAuth": {
+            "description": "X.509 client certificate (authMethod cert)",
+            "type": "object",
+            "properties": {
+              "certPath": {
+                "type": "string"
+              },
+              "keyPath": {
+                "type": "string"
+              },
+              "caPath": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "certPath"
+            ],
+            "additionalProperties": {}
+          },
+          "certPassphrase": {
+            "description": "Passphrase of the client certificate key",
+            "type": "string"
+          },
+          "landscape": {
+            "description": "Free text: landscape this system belongs to",
+            "type": "string"
+          },
+          "clientType": {
+            "description": "Free text: role, e.g. Development, QA, Production",
+            "type": "string"
+          },
+          "sapGui": {
+            "description": "SAP GUI connection data",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "url",
+          "username"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "mcp": {
+      "default": {
+        "transport": "stdio",
+        "host": "127.0.0.1",
+        "port": 4847,
+        "exposeEditTool": true
+      },
+      "type": "object",
+      "properties": {
+        "transport": {
+          "description": "stdio: the MCP client spawns the server. http: long-running server on host:port/mcp",
+          "default": "stdio",
+          "type": "string",
+          "enum": [
+            "stdio",
+            "http"
+          ]
+        },
+        "host": {
+          "description": "HTTP bind address",
+          "default": "127.0.0.1",
+          "type": "string"
+        },
+        "port": {
+          "description": "HTTP port",
+          "default": 4847,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "apiKey": {
+          "description": "When set, HTTP clients must send Authorization: Bearer <key>",
+          "type": "string"
+        },
+        "exposeEditTool": {
+          "description": "Expose replace_string_in_abap_object",
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "settings": {
+      "description": "Any other ABAP FS setting by its VS Code id, e.g. \"abapfs.atc.autoRefresh\": true",
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "secrets": {
+      "description": "Raw secret storage entries",
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "extensions": {
+      "description": "VS Code extension ids to report as installed to tools that check for them",
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stateDir": {
+      "description": "Where state (globalState, tool caches) is kept",
+      "type": "string"
+    },
+    "logLevel": {
+      "default": "warn",
+      "type": "string",
+      "enum": [
+        "error",
+        "warn",
+        "info",
+        "debug"
+      ]
+    }
+  },
+  "required": [
+    "systems"
+  ],
+  "additionalProperties": false
+}
