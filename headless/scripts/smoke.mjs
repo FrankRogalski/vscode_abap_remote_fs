@@ -6,12 +6,12 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { createRequire } from "node:module"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(join(here, "..", "package.json"))
-const sdk = p => import(require.resolve(`@modelcontextprotocol/sdk/${p}`))
+const sdk = p => import(pathToFileURL(require.resolve(`@modelcontextprotocol/sdk/${p}`)).href)
 const { Client } = await sdk("client/index.js")
 const { StdioClientTransport } = await sdk("client/stdio.js")
 
