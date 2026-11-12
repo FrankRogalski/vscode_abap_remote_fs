@@ -16,8 +16,6 @@ export function vscodeSettingsCandidates(): string[] {
   return bases.flatMap(b => products.map(p => join(b, p, "User", "settings.json")))
 }
 
-const envName = (id: string) => `ABAPFS_${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_PASSWORD`
-
 export function configFromVscodeSettings(settingsPath?: string) {
   const path = settingsPath ?? vscodeSettingsCandidates().find(p => existsSync(p))
   if (!path || !existsSync(path))
@@ -40,22 +38,18 @@ export function configFromVscodeSettings(settingsPath?: string) {
   // the MCP block replaces these
   for (const k of Object.keys(flat)) if (k.startsWith("abapfs.mcpServer")) delete flat[k]
 
+  // passwords are never copied: they go to the OS credential store (`abapfs-mcp password set`)
   const systems: Record<string, unknown> = {}
-  const env: string[] = []
+  const needPassword: string[] = []
   for (const [id, remote] of Object.entries(remotes)) {
-    const { password, ...rest } = remote
+    const { password: _password, ...rest } = remote
     const authMethod = (rest.authMethod as string | undefined) ?? "basic"
-    const sys: Record<string, unknown> = { ...rest }
-    if (authMethod === "basic") {
-      sys.password = `\${env:${envName(id)}}`
-      env.push(envName(id))
-      if (password) sys.password = `\${env:${envName(id)}}` // never copy plain text passwords
-    }
-    systems[id] = sys
+    if (authMethod === "basic") needPassword.push(id)
+    systems[id] = rest
   }
   return {
     source: path,
-    env,
+    needPassword,
     config: { systems, mcp: { transport: "stdio", port: 4847 }, settings: flat, logLevel: "warn" }
   }
 }

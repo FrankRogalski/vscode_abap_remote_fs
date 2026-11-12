@@ -1,0 +1,104 @@
+# Verifies the headless MCP server on Linux, Windows and macOS: typecheck, unit tests, build,
+# MCP smoke test, and (Windows, macOS) installing and removing the logon service.
+# Runs on pushes and PRs that touch it, and is called by the nightly upstream sync before it
+# publishes a merge to master.
+name: Headless CI
+
+on:
+  push:
+    branches: [master, "headless/**"]
+    paths: ["headless/**", ".github/workflows/headless-*.yml", "pnpm-lock.yaml"]
+  pull_request:
+    paths: ["headless/**", ".github/workflows/headless-*.yml", "pnpm-lock.yaml"]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to verify
+        type: string
+        required: true
+      os:
+        description: JSON list of runners
+        type: string
+        default: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.os || '["ubuntu-latest", "windows-latest", "macos-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep line endings as committed
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm --filter abapfs-headless typecheck
+
+      - name: Unit tests
+        run: pnpm --filter abapfs-headless test
+
+      - name: Format
+        if: runner.os == 'Linux'
+        run: pnpm exec prettier --check headless .github/workflows/headless-upstream-sync.yml .github/workflows/headless-ci.yml
+
+      - name: Build
+        run: pnpm --filter abapfs-headless build
+
+      - name: MCP smoke test
+        working-directory: headless
+        run: node scripts/smoke.mjs --min-tools 40
+
+      - name: Logon service (install, health, uninstall)
+        if: runner.os != 'Linux' # GitHub's Linux runners have no systemd user session
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/abapfs"
+          mkdir -p "$dir"
+          cat >"$dir/config.json" <<EOF
+          {
+            "systems": { "ci100": { "url": "http://127.0.0.1:9", "username": "CI", "password": "x" } },
+            "mcp": { "transport": "http", "port": 4890, "apiKey": "ci-key" },
+            "logLevel": "info"
+          }
+          EOF
+          cli="headless/dist/cli.js"
+          node "$cli" service install --config "$dir/config.json" --no-update | tee install.log
+          grep -q "Health:    ok" install.log
+          node "$cli" service status --config "$dir/config.json"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4890/mcp)
+          [ "$code" = "401" ] || { echo "expected 401 without API key, got $code"; exit 1; }
+          node "$cli" service restart
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4890/health && break; sleep 1; done
+          curl -sf http://127.0.0.1:4890/health
+          node "$cli" service uninstall
+          sleep 8
+          if curl -s --max-time 3 http://127.0.0.1:4890/health; then echo "server still running after uninstall"; exit 1; fi
+
+      - name: Service log
+        if: always() && runner.os != 'Linux'
+        run: |
+          cat "$HOME/Library/Logs/abapfs-mcp.log" 2>/dev/null || true
+          cat "$LOCALAPPDATA/abapfs-mcp/logs/abapfs-mcp.log" 2>/dev/null || true

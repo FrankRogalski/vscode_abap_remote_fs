@@ -29,8 +29,10 @@ describe("config", () => {
       })
     )
     const cfg = loadConfig(file)
-    expect(resolvePassword(cfg.systems.ok1!)).toBe("plain")
-    expect(() => resolvePassword(cfg.systems.bad!)).toThrow(/ABAPFS_TEST_UNSET_PW is not set/)
+    expect(resolvePassword(cfg.systems.ok1!, "ok1")).toBe("plain")
+    expect(() => resolvePassword(cfg.systems.bad!, "bad")).toThrow(
+      /ABAPFS_TEST_UNSET_PW is not set/
+    )
     writeFileSync(
       file,
       JSON.stringify({ systems: { ok1: { url: "${env:ABAPFS_TEST_UNSET_URL}", username: "a" } } })

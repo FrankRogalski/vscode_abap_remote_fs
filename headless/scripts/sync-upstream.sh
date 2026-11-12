@@ -71,7 +71,7 @@ fi
 verify() {
   say "Typecheck" && pnpm --filter abapfs-headless typecheck &&
     say "Unit tests" && pnpm --filter abapfs-headless test &&
-    say "Format" && pnpm exec prettier --check headless .github/workflows/headless-upstream-sync.yml &&
+    say "Format" && pnpm exec prettier --check headless .github/workflows/headless-upstream-sync.yml .github/workflows/headless-ci.yml &&
     say "Build" && pnpm --filter abapfs-headless build &&
     say "MCP smoke test" &&
     (cd headless && node scripts/smoke.mjs --min-tools "${MIN_TOOLS:-40}" >/tmp/abapfs-smoke.json; rc=$?; cat /tmp/abapfs-smoke.json; exit $rc)

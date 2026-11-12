@@ -8,6 +8,7 @@
  *   abapfs-mcp check [--system id]  validate the config and log on to the systems
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { dirname, resolve } from "node:path"
 import { parseArgs } from "node:util"
 import {
@@ -15,10 +16,13 @@ import {
   configJsonSchema,
   configTemplate,
   defaultConfigLocations,
+  findConfigFile,
   loadConfig,
   parseConfig
 } from "./config"
 import { log } from "./log"
+import { deleteStoredPassword, secretStoreName, storePassword } from "./secretStore"
+import { runSupervisor, serviceCommand, watchSupervisor } from "./service"
 
 // stdout belongs to the MCP stdio transport: route all console output to stderr
 for (const m of ["log", "info", "debug", "trace"] as const)
@@ -46,6 +50,7 @@ const { values, positionals } = parseArgs({
     force: { type: "boolean" },
     "from-vscode": { type: "boolean" },
     "vscode-settings": { type: "string" },
+    "no-update": { type: "boolean" },
     help: { type: "boolean", short: "h" }
   }
 })
@@ -60,6 +65,13 @@ Usage:
   abapfs-mcp schema                    print the config JSON schema
   abapfs-mcp tools [--json]            list exposed tools
   abapfs-mcp check [--system <id>]     validate config and log on to the systems
+  abapfs-mcp password set|delete <id>  store/remove a system's password in the OS credential
+                                       store (macOS keychain, Windows Credential Manager,
+                                       Linux Secret Service)
+  abapfs-mcp service install [--config <file>] [--no-update]
+                                       run the HTTP server at logon (launchd, Task Scheduler,
+                                       systemd --user), updated hourly from git
+  abapfs-mcp service status|restart|uninstall
 
 Config lookup: --config, $ABAPFS_CONFIG, ./abapfs.json, ~/.config/abapfs/config.json
 `
@@ -78,6 +90,7 @@ function withOverrides(cfg: HeadlessConfig) {
 }
 
 async function serve() {
+  watchSupervisor()
   const cfg = withOverrides(loadConfig(values.config))
   const rt = await boot(cfg)
   log.info(
@@ -110,10 +123,7 @@ async function init() {
     content = { $schema: configTemplate().$schema, ...r.config }
     note =
       `Converted ${Object.keys(r.config.systems).length} system(s) from ${r.source}.\n` +
-      (r.env.length
-        ? `Passwords are read from environment variables: ${r.env.join(", ")}\n` +
-          `(or replace them with "passwordCommand", e.g. a keychain lookup).\n`
-        : "")
+      r.needPassword.map(id => `Store the password: abapfs-mcp password set ${id}\n`).join("")
   }
   mkdirSync(dirname(target), { recursive: true })
   writeFileSync(target, JSON.stringify(content, null, 2) + "\n", { mode: 0o600 })
@@ -126,7 +136,7 @@ async function tools() {
     systems: { dummy: { url: "http://localhost", username: "x" } },
     logLevel: "error"
   })
-  cfg.stateDir = resolve(process.env.TMPDIR ?? "/tmp", "abapfs-mcp-tools")
+  cfg.stateDir = resolve(tmpdir(), "abapfs-mcp-tools")
   const rt = await boot(cfg)
   const { runtime } = await import("./vscode/impl")
   const { lm } = await import("vscode")
@@ -174,6 +184,35 @@ async function check() {
   process.exit(failed ? 1 : 0)
 }
 
+async function password() {
+  const [, sub, id] = positionals
+  if (!id || !["set", "delete"].includes(sub ?? ""))
+    throw new Error("Usage: abapfs-mcp password set|delete <system id>")
+  try {
+    const cfg = loadConfig(values.config)
+    if (!cfg.systems[id])
+      log.warn(`'${id}' is not a system in ${cfg.configPath} (ids are case-sensitive)`)
+  } catch {
+    // storing a password before the config exists is fine
+  }
+  if (sub === "set") {
+    storePassword(id)
+    return void process.stdout.write(`Stored the password for ${id} in the ${secretStoreName()}\n`)
+  }
+  const removed = deleteStoredPassword(id)
+  process.stdout.write(
+    removed ? `Removed the password for ${id}\n` : `No password stored for ${id}\n`
+  )
+}
+
+async function service() {
+  if (positionals[1] === "run") {
+    return runSupervisor(findConfigFile(values.config), !values["no-update"])
+  }
+  await serviceCommand(positionals[1], { config: values.config, noUpdate: values["no-update"] })
+  process.exit(0)
+}
+
 async function main() {
   if (values.help) return void process.stdout.write(usage)
   const cmd = positionals[0] ?? "serve"
@@ -189,6 +228,10 @@ async function main() {
       return process.exit(0)
     case "check":
       return check()
+    case "password":
+      return await password()
+    case "service":
+      return await service()
     default:
       process.stderr.write(usage)
       process.exit(2)

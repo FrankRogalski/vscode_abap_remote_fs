@@ -24,7 +24,7 @@
             "type": "string"
           },
           "password": {
-            "description": "Password. Prefer ${env:VAR} or passwordCommand over a literal value",
+            "description": "Password. Leave out (with passwordCommand) to use the OS credential store, see `abapfs-mcp password set`",
             "type": "string"
           },
           "passwordCommand": {

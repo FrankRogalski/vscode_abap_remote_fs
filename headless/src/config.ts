@@ -13,6 +13,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, isAbsolute, join, resolve } from "node:path"
 import { z } from "zod/v4"
+import { readStoredPassword, secretStoreName } from "./secretStore"
 
 export const systemSchema = z
   .looseObject({
@@ -21,7 +22,9 @@ export const systemSchema = z
     password: z
       .string()
       .optional()
-      .describe("Password. Prefer ${env:VAR} or passwordCommand over a literal value"),
+      .describe(
+        "Password. Leave out (with passwordCommand) to use the OS credential store, see `abapfs-mcp password set`"
+      ),
     passwordCommand: z
       .string()
       .optional()
@@ -140,11 +143,23 @@ export function interpolateEnv<T>(
   return value
 }
 
-const configHome = () => process.env.XDG_CONFIG_HOME || join(homedir(), ".config")
-export const defaultConfigLocations = () => [
-  resolve("abapfs.json"),
-  join(configHome(), "abapfs", "config.json")
-]
+const isWindows = () => process.platform === "win32"
+const xdgConfigHome = () => process.env.XDG_CONFIG_HOME || join(homedir(), ".config")
+/** Per-user config folder: %APPDATA% on Windows, $XDG_CONFIG_HOME or ~/.config elsewhere */
+const configHome = () =>
+  isWindows() ? process.env.APPDATA || join(homedir(), "AppData", "Roaming") : xdgConfigHome()
+/** Per-user state folder: %LOCALAPPDATA% on Windows, $XDG_STATE_HOME or ~/.local/state elsewhere */
+export const stateHome = () =>
+  isWindows()
+    ? process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local")
+    : process.env.XDG_STATE_HOME || join(homedir(), ".local", "state")
+
+export const defaultConfigLocations = () => {
+  const list = [resolve("abapfs.json"), join(configHome(), "abapfs", "config.json")]
+  // ~/.config works on Windows too (shared dotfiles)
+  if (isWindows()) list.push(join(xdgConfigHome(), "abapfs", "config.json"))
+  return list
+}
 
 export function findConfigFile(explicit?: string): string {
   const candidate = explicit || process.env.ABAPFS_CONFIG
@@ -161,7 +176,7 @@ export function findConfigFile(explicit?: string): string {
   return found
 }
 
-const expandHome = (p: string) => (p.startsWith("~/") ? join(homedir(), p.slice(2)) : p)
+const expandHome = (p: string) => (/^~[/\\]/.test(p) ? join(homedir(), p.slice(2)) : p)
 
 export function parseConfig(raw: unknown, configPath = "<inline>"): HeadlessConfig {
   const result = configSchema.safeParse(raw)
@@ -182,9 +197,7 @@ export function parseConfig(raw: unknown, configPath = "<inline>"): HeadlessConf
       sys.certAuth.caPath = abs(sys.certAuth.caPath)
     }
   }
-  const stateDir =
-    abs(cfg.stateDir) ??
-    join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "abapfs-mcp")
+  const stateDir = abs(cfg.stateDir) ?? join(stateHome(), "abapfs-mcp")
   return { ...cfg, configPath, stateDir }
 }
 
@@ -211,17 +224,28 @@ export function loadConfig(explicit?: string): HeadlessConfig {
   return cfg
 }
 
-/** Password of a system: literal value first, then passwordCommand */
-export function resolvePassword(sys: SystemConfig): string {
+const needsPassword = (sys: SystemConfig) => !sys.authMethod || sys.authMethod === "basic"
+
+/**
+ * Password of a system: literal value (or ${env:VAR}), then passwordCommand, then the OS
+ * credential store entry for the system id (see `abapfs-mcp password set <id>`).
+ */
+export function resolvePassword(sys: SystemConfig, id: string): string {
   if (sys.password) return sys.password
   if (sys.passwordCommand)
     return execSync(sys.passwordCommand, {
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true
     }).replace(/\r?\n$/, "")
   if (typeof sys.passwordEnv === "string")
     throw new Error(`No password: environment variable ${sys.passwordEnv} is not set`)
-  return ""
+  if (!needsPassword(sys)) return ""
+  const stored = readStoredPassword(id)
+  if (stored !== undefined) return stored
+  throw new Error(
+    `No password for ${id}: run \`abapfs-mcp password set ${id}\` to store it in the ${secretStoreName()}`
+  )
 }
 
 export const configJsonSchema = () =>
@@ -234,7 +258,6 @@ export const configTemplate = () => ({
     dev100: {
       url: "https://my-sap-host:44300",
       username: "DEVELOPER",
-      password: "${env:ABAPFS_DEV100_PASSWORD}",
       client: "100",
       language: "EN",
       allowSelfSigned: false,

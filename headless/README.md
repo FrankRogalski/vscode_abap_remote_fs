@@ -19,6 +19,8 @@ pnpm --filter abapfs-headless build
 ```
 
 `--ignore-scripts` skips upstream's Playwright/Chromium download, which the MCP server does not need.
+Everything works the same on macOS, Windows and Linux (Node 20+, git and pnpm on the PATH); on
+Windows use PowerShell and `node headless\dist\cli.js`.
 
 Create a config, either from your existing VS Code settings or from a template:
 
@@ -30,13 +32,21 @@ node headless/dist/cli.js init --from-vscode
 node headless/dist/cli.js init
 ```
 
-Both write `~/.config/abapfs/config.json` (mode 600). Set the passwords it references, then check
-that the server can log on:
+Both write the config to `~/.config/abapfs/config.json` (macOS, Linux; mode 600) or
+`%APPDATA%\abapfs\config.json` (Windows). Store each system's password in the operating system's
+credential store, then check that the server can log on:
 
 ```bash
-export ABAPFS_DEV100_PASSWORD='…'
+node headless/dist/cli.js password set dev100
+```
+
+```bash
 node headless/dist/cli.js check
 ```
+
+`password set` lets the OS prompt for the password (macOS keychain, Windows Credential Manager,
+Linux Secret Service via `secret-tool`); it never appears in the config, the shell history or the
+process list.
 
 Register it with your MCP client, e.g. Claude Code:
 
@@ -51,8 +61,7 @@ Or in any client's JSON config (stdio):
   "mcpServers": {
     "abap-fs": {
       "command": "node",
-      "args": ["/path/to/vscode_abap_remote_fs/headless/dist/cli.js", "--config", "/path/to/config.json"],
-      "env": { "ABAPFS_DEV100_PASSWORD": "…" }
+      "args": ["/path/to/vscode_abap_remote_fs/headless/dist/cli.js", "--config", "/path/to/config.json"]
     }
   }
 }
@@ -65,10 +74,15 @@ Or in any client's JSON config (stdio):
 | `abapfs-mcp [serve]` | Start the MCP server (stdio unless the config says `http`). `--http`, `--stdio`, `--host`, `--port` override the config. |
 | `abapfs-mcp init [file] [--from-vscode] [--force]` | Write a config, converted from VS Code's `abapfs.*` settings or from a template. |
 | `abapfs-mcp check [--system id]` | Validate the config and log on to each system. |
+| `abapfs-mcp password set\|delete <id>` | Store or remove a system's password in the OS credential store. |
+| `abapfs-mcp service install [--no-update]` | Run the HTTP server at logon, updated hourly from git (see [Running as a service](#running-as-a-service)). |
+| `abapfs-mcp service status\|restart\|uninstall` | Manage that service. |
 | `abapfs-mcp tools [--json]` | List the tools this build serves. |
 | `abapfs-mcp schema` | Print the config JSON schema (also in [config.schema.json](config.schema.json)). |
 
-Config lookup order: `--config`, `$ABAPFS_CONFIG`, `./abapfs.json`, `~/.config/abapfs/config.json`.
+Config lookup order: `--config`, `$ABAPFS_CONFIG`, `./abapfs.json`, then
+`~/.config/abapfs/config.json` (macOS, Linux; `$XDG_CONFIG_HOME` respected) or
+`%APPDATA%\abapfs\config.json` and `~\.config\abapfs\config.json` (Windows).
 
 ## Configuration
 
@@ -79,7 +93,6 @@ Config lookup order: `--config`, `$ABAPFS_CONFIG`, `./abapfs.json`, `~/.config/a
     "dev100": {
       "url": "https://my-sap-host:44300",
       "username": "DEVELOPER",
-      "password": "${env:ABAPFS_DEV100_PASSWORD}",
       "client": "100",
       "language": "EN",
       "allowSelfSigned": false,
@@ -88,7 +101,7 @@ Config lookup order: `--config`, `$ABAPFS_CONFIG`, `./abapfs.json`, `~/.config/a
     "qa200": {
       "url": "https://qa-host:44300",
       "username": "DEVELOPER",
-      "passwordCommand": "security find-generic-password -s sap-qa200 -w",
+      "password": "${env:ABAPFS_QA200_PASSWORD}",
       "client": "200"
     }
   },
@@ -101,8 +114,8 @@ Config lookup order: `--config`, `$ABAPFS_CONFIG`, `./abapfs.json`, `~/.config/a
 | Key | Meaning |
 | --- | --- |
 | `systems` | Connections by id. The id is the `connectionId` the tools take. Each entry accepts every field of a VS Code `abapfs.remote` entry (`url`, `username`, `client`, `language`, `allowSelfSigned`, `customCA`, `atcVariant`, `sapGui`, `authMethod`, `certAuth`, …). |
-| `systems.*.password` | Password. Use `${env:VAR}` rather than a literal. |
-| `systems.*.passwordCommand` | Alternative: a shell command printing the password (keychain, `pass`, 1Password CLI, …). |
+| `systems.*.password` | Optional. Without `password` and `passwordCommand`, the password comes from the OS credential store entry for the system id (`abapfs-mcp password set <id>`). If you set it, use `${env:VAR}` rather than a literal. |
+| `systems.*.passwordCommand` | Optional: a shell command printing the password (`pass`, 1Password CLI, …). |
 | `systems.*.certPassphrase` | Passphrase for `authMethod: "cert"`. |
 | `mcp.transport` | `stdio` (the client spawns the server) or `http` (long-running, endpoint `http://host:port/mcp`, health check at `/health`). |
 | `mcp.apiKey` | When set, HTTP clients must send `Authorization: Bearer <key>`. |
@@ -110,7 +123,7 @@ Config lookup order: `--config`, `$ABAPFS_CONFIG`, `./abapfs.json`, `~/.config/a
 | `settings` | Any other ABAP FS setting by its VS Code id, flat (`"abapfs.atc.autoRefresh": false`) or nested. Unset settings use the extension's defaults. |
 | `secrets` | Raw secret-storage entries, for the rare tool that reads its own secret. |
 | `extensions` | VS Code extension ids to report as installed to tools that check for them. |
-| `stateDir` | Where state that VS Code would keep in globalState/storage goes. Default `~/.local/state/abapfs-mcp`. |
+| `stateDir` | Where state that VS Code would keep in globalState/storage goes. Default `~/.local/state/abapfs-mcp` (`%LOCALAPPDATA%\abapfs-mcp` on Windows). |
 | `logLevel` | `error`, `warn`, `info` or `debug`. Logs go to stderr. `$ABAPFS_LOG_LEVEL` overrides it. |
 
 Every string in the file may use `${env:NAME}`. Relative paths are resolved against the config file.
@@ -180,31 +193,38 @@ GitHub's built-in token cannot push commits that change `.github/workflows/*`, w
 now and then. To cover those nights, add a fine-grained personal access token for this repository
 with **Contents: read and write** and **Workflows: read and write** as the secret `SYNC_TOKEN`.
 
-To follow the fork on your machine, run [scripts/update-local.sh](scripts/update-local.sh). It pulls
-and rebuilds only when the fork has moved, and restarts the macOS service below if it is installed.
+Before master moves, the merge is pushed to `upstream-sync/candidate` and verified again on Windows
+and macOS by [headless-ci.yml](../.github/workflows/headless-ci.yml), which also runs on every push
+that touches `headless/`. Only a merge that passes on all three systems is fast-forwarded onto master.
 
-## Running as a service (macOS)
+To follow the fork on your machine, install the service below (it updates itself) or run
+`node headless/scripts/update-local.mjs` by hand: it pulls and rebuilds only when the fork moved.
+
+## Running as a service
 
 ```bash
-headless/scripts/install-launchd.sh install --config ~/.config/abapfs/config.json
+node headless/dist/cli.js service install --config ~/.config/abapfs/config.json
 ```
 
-This installs two launchd agents in your login session (so `passwordCommand` can read the login keychain):
+This starts the HTTP server now and at every logon, restarts it if it exits, and checks the git
+checkout for updates every hour (pull, rebuild, restart; `--no-update` turns that off). It runs
+inside your login session, so it can read the passwords from the OS credential store.
 
-| Agent                   | What it does                                                                   |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `com.abapfs.mcp`        | `abapfs-mcp serve --http` at login, restarted if it exits                      |
-| `com.abapfs.mcp-update` | hourly `update-local.sh`: pull, rebuild and restart the server when the fork moved |
+| | Runs as | Log |
+| --- | --- | --- |
+| macOS | launchd agent `com.abapfs.mcp` | `~/Library/Logs/abapfs-mcp.log` |
+| Windows | Task Scheduler task `\abapfs\abapfs-mcp` (hidden PowerShell window at logon) | `%LOCALAPPDATA%\abapfs-mcp\logs\abapfs-mcp.log` |
+| Linux | systemd user unit `abapfs-mcp.service` | `~/.local/state/abapfs-mcp/logs/abapfs-mcp.log` |
 
-Logs go to `~/Library/Logs/com.abapfs.mcp.log` and `~/Library/Logs/com.abapfs.mcp-update.log`.
-Check them with `install-launchd.sh status`, and remove the agents with `install-launchd.sh uninstall`.
-Set `mcp.apiKey` in the config and register the server with your client, for example:
+`service status` shows the platform state and the server's health; `service restart` and
+`service uninstall` do what they say. Set `mcp.apiKey` in the config and register the server with
+your client, for example:
 
 ```bash
 claude mcp add --transport http abap-fs -s user http://127.0.0.1:4848/mcp --header "Authorization: Bearer <apiKey>"
 ```
 
-Port 4848 keeps clear of the VS Code extension's default of 4847, so both can run at once.
+Pick a port other than 4847 (the VS Code extension's default) if both may run at once.
 
 ## Development
 

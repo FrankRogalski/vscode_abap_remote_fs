@@ -86,7 +86,10 @@ export function applyConfig(cfg: HeadlessConfig) {
   const resolvers = new Map<string, SecretResolver>()
   for (const [rawId, sys] of Object.entries(cfg.systems)) {
     const id = rawId.toLowerCase()
-    resolvers.set(`vscode.abapfs.${id}:${sys.username}`, () => resolvePassword(sys) || undefined)
+    resolvers.set(
+      `vscode.abapfs.${id}:${sys.username}`,
+      () => resolvePassword(sys, rawId) || undefined
+    )
     if (sys.certPassphrase) resolvers.set(`vscode.abapfs.cert:${id}`, () => sys.certPassphrase)
   }
   for (const [k, v] of Object.entries(cfg.secrets)) resolvers.set(k, () => v)
