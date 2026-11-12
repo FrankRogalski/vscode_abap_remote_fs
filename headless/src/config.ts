@@ -33,6 +33,12 @@ export const systemSchema = z
       ),
     client: z.string().default("").describe("SAP client (Mandant), e.g. 100"),
     language: z.string().default("EN").describe("Logon language"),
+    readOnly: z
+      .boolean()
+      .optional()
+      .describe(
+        "Refuse every tool and ADT call that changes this system or runs code on it (edit, create, activate, transports, unit tests, debugger)"
+      ),
     allowSelfSigned: z.boolean().optional().describe("Accept self-signed TLS certificates"),
     customCA: z.string().optional().describe("Path to a PEM CA bundle"),
     atcVariant: z.string().optional().describe("ATC check variant"),

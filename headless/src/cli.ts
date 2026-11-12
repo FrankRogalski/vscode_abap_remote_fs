@@ -167,7 +167,7 @@ async function tools() {
 async function check() {
   const cfg = loadConfig(values.config)
   process.stdout.write(`Config ${cfg.configPath} is valid\n`)
-  await boot(cfg)
+  const rt = await boot(cfg)
   const { getOrCreateClient } = await import("upstream:adt/conections")
   const ids = values.system ? [values.system] : Object.keys(cfg.systems)
   let failed = 0
@@ -175,7 +175,13 @@ async function check() {
     try {
       const client = await getOrCreateClient(id.toLowerCase())
       await client.login()
-      process.stdout.write(`✔ ${id}: logged on as ${client.username}\n`)
+      const guarded = rt.readOnlySystemOf(client)
+      const ro = cfg.systems[id]?.readOnly
+      if (ro && !guarded)
+        throw new Error("readOnly is set but the ADT guard does not match this client")
+      process.stdout.write(
+        `✔ ${id}: logged on as ${client.username}${guarded ? " (read-only)" : ""}\n`
+      )
     } catch (e) {
       failed++
       process.stdout.write(`✘ ${id}: ${e instanceof Error ? e.message : e}\n`)

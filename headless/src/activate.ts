@@ -10,7 +10,9 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 // the extension manifest: setting defaults and the tool descriptions/input schemas
 import packageJSON from "../../package.json"
+import { ADTClient } from "upstream-dep:abap-adt-api"
 import { type HeadlessConfig, type SystemConfig, resolvePassword } from "./config"
+import { assertToolAllowed, clientKey, installAdtGuard } from "./readOnly"
 import { createExtensionContext, type SecretResolver } from "./context"
 import { log, setLogLevel } from "./log"
 import { runtime, type ContributedTool } from "./vscode/impl"
@@ -62,6 +64,26 @@ function storedRemote(sys: SystemConfig) {
   const copy: Record<string, unknown> = { ...sys }
   for (const f of SECRET_ONLY_FIELDS) delete copy[f]
   return copy
+}
+
+/**
+ * Guard read-only systems at the ADT level (see readOnly.ts). Returns their ids in lower case,
+ * for the tool-level check, and the matcher that maps an ADT client to its read-only system.
+ */
+export function installReadOnly(cfg: HeadlessConfig) {
+  const ids = new Map<string, string>()
+  const byClient = new Map<string, string>()
+  for (const [id, sys] of Object.entries(cfg.systems)) {
+    if (!sys.readOnly) continue
+    ids.set(id.toLowerCase(), id)
+    byClient.set(clientKey(sys.url, sys.client, sys.username), id)
+  }
+  const systemOf = (c: any): string | undefined =>
+    byClient.get(
+      clientKey(String(c?.baseUrl ?? ""), String(c?.client ?? ""), String(c?.username ?? ""))
+    )
+  if (ids.size) installAdtGuard(ADTClient.prototype, systemOf)
+  return { ids, systemOf }
 }
 
 export function applyConfig(cfg: HeadlessConfig) {
@@ -127,6 +149,8 @@ export function referencedSystems(input: unknown): Set<string> {
 export interface HeadlessRuntime {
   context: ReturnType<typeof createExtensionContext>
   toolNames(): string[]
+  /** id of the read-only system an ADT client belongs to */
+  readOnlySystemOf(client: unknown): string | undefined
   dispose(): Promise<void>
 }
 
@@ -175,11 +199,15 @@ export async function activateHeadless(cfg: HeadlessConfig): Promise<HeadlessRun
   const { registerCommands } = await import("upstream:commands/register")
   registerCommands(context as any)
 
+  const readOnly = installReadOnly(cfg)
+
   // VS Code connects every workspace folder when it opens; headless connects on first use
   const { getOrCreateClient } = await import("upstream:adt/conections")
   const configured = new Set(Object.keys(cfg.systems).map(k => k.toLowerCase()))
-  runtime.beforeToolInvoke = async (_name, input) => {
-    for (const id of referencedSystems(input))
+  runtime.beforeToolInvoke = async (name, input) => {
+    const referenced = referencedSystems(input)
+    assertToolAllowed(name, referenced, readOnly.ids, input)
+    for (const id of referenced)
       if (configured.has(id))
         await getOrCreateClient(id).catch((e: unknown) => {
           throw new Error(`Cannot connect to ${id}: ${e instanceof Error ? e.message : e}`)
@@ -195,6 +223,7 @@ export async function activateHeadless(cfg: HeadlessConfig): Promise<HeadlessRun
   return {
     context,
     toolNames: () => [...runtime.tools.keys()],
+    readOnlySystemOf: readOnly.systemOf,
     async dispose() {
       const { disconnect } = await import("upstream:adt/conections")
       await Promise.race([disconnect([], true), new Promise(r => setTimeout(r, 5000))]).catch(

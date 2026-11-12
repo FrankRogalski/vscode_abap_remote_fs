@@ -116,6 +116,7 @@ Config lookup order: `--config`, `$ABAPFS_CONFIG`, `./abapfs.json`, then
 | `systems` | Connections by id. The id is the `connectionId` the tools take. Each entry accepts every field of a VS Code `abapfs.remote` entry (`url`, `username`, `client`, `language`, `allowSelfSigned`, `customCA`, `atcVariant`, `sapGui`, `authMethod`, `certAuth`, …). |
 | `systems.*.password` | Optional. Without `password` and `passwordCommand`, the password comes from the OS credential store entry for the system id (`abapfs-mcp password set <id>`). If you set it, use `${env:VAR}` rather than a literal. |
 | `systems.*.passwordCommand` | Optional: a shell command printing the password (`pass`, 1Password CLI, …). |
+| `systems.*.readOnly` | `true` refuses everything that changes the system or runs code on it, see [Read-only systems](#read-only-systems). |
 | `systems.*.certPassphrase` | Passphrase for `authMethod: "cert"`. |
 | `mcp.transport` | `stdio` (the client spawns the server) or `http` (long-running, endpoint `http://host:port/mcp`, health check at `/health`). |
 | `mcp.apiKey` | When set, HTTP clients must send `Authorization: Bearer <key>`. |
@@ -125,6 +126,28 @@ Config lookup order: `--config`, `$ABAPFS_CONFIG`, `./abapfs.json`, then
 | `extensions` | VS Code extension ids to report as installed to tools that check for them. |
 | `stateDir` | Where state that VS Code would keep in globalState/storage goes. Default `~/.local/state/abapfs-mcp` (`%LOCALAPPDATA%\abapfs-mcp` on Windows). |
 | `logLevel` | `error`, `warn`, `info` or `debug`. Logs go to stderr. `$ABAPFS_LOG_LEVEL` overrides it. |
+
+### Read-only systems
+
+```jsonc
+"prd100": { "url": "https://prd-host:44300", "username": "DEVELOPER", "client": "100", "readOnly": true }
+```
+
+Tools can still read sources, search, run SQL `SELECT`s and ATC checks, analyse dumps and traces.
+Refused: editing, creating, activating, text element and transport changes, unit tests and the
+debugger (both run code on the system). It is enforced twice:
+
+1. **Tools:** [src/readOnly.ts](src/readOnly.ts) classifies every MCP tool (some by `action`) as
+   read or write; a write that names a read-only system is refused before anything is sent.
+   Tools missing from the table count as writes.
+2. **ADT:** every method of the ADT client that changes the system or executes code (`lock`,
+   `setObjectSource`, `createObject`, `activate`, transport changes, `unitTestRun`, debugger, …)
+   rejects for a client of a read-only system, whichever code path calls it.
+
+Unit tests fail when upstream adds a tool or the ADT library adds a method that is not classified
+yet, so nothing new slips through. `abapfs-mcp check` prints `(read-only)` for systems whose live
+connection the ADT guard recognises. Systems are matched by URL, client and user: if a read-only
+system shares all three with another entry, both are read-only.
 
 Every string in the file may use `${env:NAME}`. Relative paths are resolved against the config file.
 

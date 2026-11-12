@@ -41,6 +41,10 @@
             "default": "EN",
             "type": "string"
           },
+          "readOnly": {
+            "description": "Refuse every tool and ADT call that changes this system or runs code on it (edit, create, activate, transports, unit tests, debugger)",
+            "type": "boolean"
+          },
           "allowSelfSigned": {
             "description": "Accept self-signed TLS certificates",
             "type": "boolean"

@@ -3,7 +3,8 @@
   "compilerOptions": {
     "types": ["node", "vitest/globals"],
     "paths": {
-      "upstream:*": ["../client/src/*"]
+      "upstream:*": ["../client/src/*"],
+      "upstream-dep:*": ["../client/node_modules/*"]
     }
   },
   "include": ["src", "tsdown.config.ts"],

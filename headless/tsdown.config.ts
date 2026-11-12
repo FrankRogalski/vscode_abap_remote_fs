@@ -32,6 +32,14 @@ const norm = (p: string) => p.replace(/\\/g, "/")
 const upstreamPlugin = {
   name: "abapfs-headless:upstream",
   async resolveId(this: any, source: string, importer: string | undefined) {
+    // "upstream-dep:pkg": a dependency resolved from upstream's client package, so patches and
+    // instanceof checks apply to the very module instance upstream code uses
+    if (source.startsWith("upstream-dep:")) {
+      const dep = source.slice("upstream-dep:".length)
+      const r = await this.resolve(dep, resolve(clientSrc, "extension.ts"), { skipSelf: true })
+      if (!r) throw new Error(`Cannot resolve ${dep} from upstream's client`)
+      return r
+    }
     if (source.startsWith("upstream:")) {
       const target = resolve(clientSrc, source.slice("upstream:".length))
       const r = await this.resolve(target, importer, { skipSelf: true })
