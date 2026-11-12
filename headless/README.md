@@ -180,8 +180,31 @@ GitHub's built-in token cannot push commits that change `.github/workflows/*`, w
 now and then. To cover those nights, add a fine-grained personal access token for this repository
 with **Contents: read and write** and **Workflows: read and write** as the secret `SYNC_TOKEN`.
 
-To follow the fork on your machine, run [scripts/update-local.sh](scripts/update-local.sh) (pull and
-rebuild), for example from cron or launchd after the nightly sync.
+To follow the fork on your machine, run [scripts/update-local.sh](scripts/update-local.sh). It pulls
+and rebuilds only when the fork has moved, and restarts the macOS service below if it is installed.
+
+## Running as a service (macOS)
+
+```bash
+headless/scripts/install-launchd.sh install --config ~/.config/abapfs/config.json
+```
+
+This installs two launchd agents in your login session (so `passwordCommand` can read the login keychain):
+
+| Agent                   | What it does                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `com.abapfs.mcp`        | `abapfs-mcp serve --http` at login, restarted if it exits                      |
+| `com.abapfs.mcp-update` | hourly `update-local.sh`: pull, rebuild and restart the server when the fork moved |
+
+Logs go to `~/Library/Logs/com.abapfs.mcp.log` and `~/Library/Logs/com.abapfs.mcp-update.log`.
+Check them with `install-launchd.sh status`, and remove the agents with `install-launchd.sh uninstall`.
+Set `mcp.apiKey` in the config and register the server with your client, for example:
+
+```bash
+claude mcp add --transport http abap-fs -s user http://127.0.0.1:4848/mcp --header "Authorization: Bearer <apiKey>"
+```
+
+Port 4848 keeps clear of the VS Code extension's default of 4847, so both can run at once.
 
 ## Development
 

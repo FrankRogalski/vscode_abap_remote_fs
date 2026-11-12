@@ -1,7 +1,8 @@
 # Nightly: merge upstream into this fork, verify the headless MCP server, push only if green.
 #
 # Runs at 00:00 Europe/Berlin. GitHub cron is UTC only, so it is scheduled at 22:00 and 23:00 UTC
-# and the first step lets through only the run that lands at local midnight (CET or CEST).
+# and the first step lets through only the entry that is local midnight (CET or CEST). GitHub may
+# start scheduled runs hours late; the gate tolerates that.
 name: Headless upstream sync
 
 on:
@@ -35,9 +36,16 @@ jobs:
       - name: Midnight gate
         id: gate
         run: |
-          hour=$(TZ="$SYNC_TZ" date +%H)
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$hour" != "00" ]; then
-            echo "Not midnight in $SYNC_TZ (hour $hour), skipping"
+          # Scheduled runs often start hours late, so check the cron entry that fired, not the
+          # clock: 23:00 UTC is midnight in winter (+0100), 22:00 UTC in summer (+0200).
+          offset=$(TZ="$SYNC_TZ" date +%z)
+          case "$offset" in
+            +0100) wanted="0 23 * * *" ;;
+            +0200) wanted="0 22 * * *" ;;
+            *) wanted="" ;;
+          esac
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" != "$wanted" ]; then
+            echo "Cron '${{ github.event.schedule }}' is not midnight in $SYNC_TZ (offset $offset), skipping"
             echo "run=false" >> "$GITHUB_OUTPUT"
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
