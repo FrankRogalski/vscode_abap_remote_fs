@@ -68,5 +68,5 @@ describe.runIf(process.platform === "win32")("Windows Credential Manager", () =>
       expect(store.deleteStoredPassword(id)).toBe(true)
     }
     expect(store.readStoredPassword(id)).toBeUndefined()
-  })
+  }, 60_000) // each call spawns PowerShell, slow on cold Windows runners
 })
